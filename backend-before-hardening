@@ -1,0 +1,423 @@
+require("dotenv").config();
+const express = require("express");
+const session = require("express-session");
+const { MongoStore } = require("connect-mongo");
+const bcrypt = require("bcrypt");
+const { ObjectId } = require("mongodb");
+const { connectDatabase, getDatabase } = require("./mongo");
+
+const app = express();
+
+app.use(express.json());
+
+app.use(session({
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    store: MongoStore.create({
+        mongoUrl: process.env.MONGODB_URI,
+        dbName: process.env.MONGODB_DB_NAME,
+        collectionName: "sessions"
+    }),
+    cookie: {
+        httpOnly: true,
+        secure: false,
+        sameSite: "lax",
+        maxAge: 1000 * 60 * 60
+    }
+}));
+
+function getUserId(req) {
+    return new ObjectId(req.session.userId);
+}
+
+async function logSecurityEvent(userId, eventType) {
+    const db = getDatabase();
+
+    await db.collection("security_logs").insertOne({
+        user_id: userId,
+        event_type: eventType,
+        timestamp: new Date().toISOString()
+    });
+}
+
+function requireLogin(req, res, next) {
+    if (!req.session.userId) {
+        return res.status(401).json({
+            message: "Authentication required"
+        });
+    }
+
+    next();
+}
+
+function requireActiveLogin(req, res, next) {
+    if (!req.session.userId) {
+        return res.status(401).json({
+            message: "Authentication required"
+        });
+    }
+
+    if (req.session.passwordExpired) {
+        return res.status(403).json({
+            message: "Password expired. Please change your password."
+        });
+    }
+
+    next();
+}
+
+app.get("/", (req, res) => {
+    res.json({
+        message: "Password Security System is running"
+    });
+});
+
+app.get("/api/me", requireLogin, async (req, res) => {
+    try {
+        const db = getDatabase();
+
+        const user = await db.collection("users").findOne({
+            _id: getUserId(req)
+        });
+
+        if (!user) {
+            return res.status(401).json({
+                message: "User session is invalid"
+            });
+        }
+
+        res.json({
+            username: user.username,
+            passwordExpired: req.session.passwordExpired === true
+        });
+    } catch (error) {
+        console.log(error);
+
+        res.status(500).json({
+            message: "Server error"
+        });
+    }
+});
+
+app.post("/api/login", async (req, res) => {
+    try {
+        const { username, password } = req.body;
+
+        if (!username || !password) {
+            return res.status(400).json({
+                message: "Username and password are required"
+            });
+        }
+
+        const db = getDatabase();
+
+        const user = await db.collection("users").findOne({
+            username: username
+        });
+
+        if (!user) {
+            return res.status(401).json({
+                message: "Invalid username or password"
+            });
+        }
+
+        const passwordCorrect = await bcrypt.compare(
+            password,
+            user.password_hash
+        );
+
+        if (!passwordCorrect) {
+            await logSecurityEvent(user._id, "LOGIN_FAILED");
+
+            return res.status(401).json({
+                message: "Invalid username or password"
+            });
+        }
+
+        const currentDate = new Date();
+        const expiryDate = new Date(user.password_expiry_date);
+        const passwordExpired = currentDate >= expiryDate;
+
+        req.session.userId = user._id.toString();
+        req.session.username = user.username;
+        req.session.passwordExpired = passwordExpired;
+
+        if (passwordExpired) {
+            await logSecurityEvent(user._id, "PASSWORD_EXPIRED");
+
+            return res.status(403).json({
+                message: "Password expired. Please change your password.",
+                requiresPasswordChange: true
+            });
+        }
+
+        await logSecurityEvent(user._id, "LOGIN_SUCCESS");
+
+        res.json({
+            message: "Login successful",
+            username: user.username
+        });
+    } catch (error) {
+        console.log(error);
+
+        res.status(500).json({
+            message: "Server error"
+        });
+    }
+});
+
+app.post("/api/logout", requireLogin, async (req, res) => {
+    try {
+        await logSecurityEvent(
+            getUserId(req),
+            "LOGOUT"
+        );
+
+        req.session.destroy(error => {
+            if (error) {
+                return res.status(500).json({
+                    message: "Logout failed"
+                });
+            }
+
+            res.clearCookie("connect.sid");
+
+            res.json({
+                message: "Logout successful"
+            });
+        });
+    } catch (error) {
+        console.log(error);
+
+        res.status(500).json({
+            message: "Server error"
+        });
+    }
+});
+
+app.get("/api/password-status", requireLogin, async (req, res) => {
+    try {
+        const db = getDatabase();
+
+        const user = await db.collection("users").findOne({
+            _id: getUserId(req)
+        });
+
+        if (!user) {
+            return res.status(404).json({
+                message: "User not found"
+            });
+        }
+
+        const currentDate = new Date();
+        const expiryDate = new Date(user.password_expiry_date);
+
+        const timeDifference = expiryDate - currentDate;
+
+        const daysRemaining = Math.ceil(
+            timeDifference / (1000 * 60 * 60 * 24)
+        );
+
+        let status;
+
+        if (currentDate >= expiryDate) {
+            status = "EXPIRED";
+        } else if (daysRemaining <= 5) {
+            status = "NEAR_EXPIRY";
+        } else {
+            status = "ACTIVE";
+        }
+
+        res.json({
+            username: user.username,
+            passwordChangedAt: user.password_changed_at,
+            passwordExpiryDate: user.password_expiry_date,
+            daysRemaining: daysRemaining,
+            status: status
+        });
+    } catch (error) {
+        console.log(error);
+
+        res.status(500).json({
+            message: "Server error"
+        });
+    }
+});
+
+app.get("/api/security-logs", requireActiveLogin, async (req, res) => {
+    try {
+        const db = getDatabase();
+
+        const logs = await db.collection("security_logs")
+            .find({
+                user_id: getUserId(req)
+            })
+            .sort({
+                timestamp: -1
+            })
+            .toArray();
+
+        res.json({
+            logs: logs.map(log => ({
+                eventType: log.event_type,
+                timestamp: log.timestamp
+            }))
+        });
+    } catch (error) {
+        console.log(error);
+
+        res.status(500).json({
+            message: "Server error"
+        });
+    }
+});
+
+app.post("/api/change-password", requireLogin, async (req, res) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({
+                message: "Current password and new password are required"
+            });
+        }
+
+        const db = getDatabase();
+
+        const user = await db.collection("users").findOne({
+            _id: getUserId(req)
+        });
+
+        if (!user) {
+            return res.status(404).json({
+                message: "User not found"
+            });
+        }
+
+        const currentPasswordCorrect = await bcrypt.compare(
+            currentPassword,
+            user.password_hash
+        );
+
+        if (!currentPasswordCorrect) {
+            return res.status(401).json({
+                message: "Current password is incorrect"
+            });
+        }
+
+        if (newPassword.length < 8) {
+            return res.status(400).json({
+                message: "Password must be at least 8 characters long"
+            });
+        }
+
+        if (!/[A-Z]/.test(newPassword)) {
+            return res.status(400).json({
+                message: "Password must contain at least one uppercase letter"
+            });
+        }
+
+        if (!/[a-z]/.test(newPassword)) {
+            return res.status(400).json({
+                message: "Password must contain at least one lowercase letter"
+            });
+        }
+
+        if (!/[0-9]/.test(newPassword)) {
+            return res.status(400).json({
+                message: "Password must contain at least one number"
+            });
+        }
+
+        if (!/[^A-Za-z0-9]/.test(newPassword)) {
+            return res.status(400).json({
+                message: "Password must contain at least one special character"
+            });
+        }
+
+        if (newPassword === currentPassword) {
+            return res.status(400).json({
+                message: "New password cannot be the same as the current password"
+            });
+        }
+
+        const passwordHistory = await db.collection("password_history")
+            .find({
+                user_id: user._id
+            })
+            .toArray();
+
+        for (const oldPassword of passwordHistory) {
+            const reused = await bcrypt.compare(
+                newPassword,
+                oldPassword.password_hash
+            );
+
+            if (reused) {
+                return res.status(400).json({
+                    message: "You cannot reuse a previous password"
+                });
+            }
+        }
+
+        const newPasswordHash = await bcrypt.hash(newPassword, 12);
+
+        const changedAt = new Date();
+        const expiryDate = new Date(changedAt);
+
+        expiryDate.setDate(
+            expiryDate.getDate() + 30
+        );
+
+        await db.collection("password_history").insertOne({
+            user_id: user._id,
+            password_hash: user.password_hash,
+            created_at: changedAt.toISOString()
+        });
+
+        await db.collection("users").updateOne(
+            {
+                _id: user._id
+            },
+            {
+                $set: {
+                    password_hash: newPasswordHash,
+                    password_changed_at: changedAt.toISOString(),
+                    password_expiry_date: expiryDate.toISOString()
+                }
+            }
+        );
+
+        await logSecurityEvent(
+            user._id,
+            "PASSWORD_CHANGED"
+        );
+
+        req.session.passwordExpired = false;
+
+        res.json({
+            message: "Password changed successfully",
+            passwordExpiryDate: expiryDate.toISOString()
+        });
+    } catch (error) {
+        console.log(error);
+
+        res.status(500).json({
+            message: "Server error"
+        });
+    }
+});
+
+const PORT = process.env.PORT || 3000;
+
+connectDatabase()
+    .then(() => {
+        app.listen(PORT, () => {
+            console.log(`Server running on port ${PORT}`);
+        });
+    })
+    .catch(error => {
+        console.log("Failed to start server.");
+        console.log(error.message);
+    });
