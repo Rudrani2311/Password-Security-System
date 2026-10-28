@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "PassRotate - Universal Password Expiry & Breach Guard",
+  "name": "Password Rotation & Security System",
   "version": "1.0.0",
-  "description": "Universal password rotation, 30-day expiry enforcement, 5-day breach warnings, and HIBP dark web leak detection for any website.",
+  "description": "Password lifecycle management, 30-day rotation, and data breach checker.",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
@@ -19,23 +19,23 @@
     "<all_urls>"
   ],
   "background": {
-    "service_worker": "background/service-worker.js"
+    "service_worker": "background.js"
   },
   "action": {
-    "default_popup": "popup/popup.html",
-    "default_title": "PassRotate Security Shield",
+    "default_popup": "popup.html",
+    "default_title": "Password Security System",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     }
   },
-  "options_page": "dashboard/dashboard.html",
+  "options_page": "dashboard.html",
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["utils/crypto.js", "utils/hibp.js", "content/content-script.js"],
-      "css": ["content/content-styles.css"],
+      "js": ["crypto.js", "hibp.js", "content.js"],
+      "css": ["content.css"],
       "run_at": "document_idle"
     }
   ],
@@ -45,7 +45,7 @@
         "icons/icon16.png",
         "icons/icon48.png",
         "icons/icon128.png",
-        "content/content-styles.css"
+        "content.css"
       ],
       "matches": ["<all_urls>"]
     }

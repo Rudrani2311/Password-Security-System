@@ -1,7 +1,7 @@
-// PassRotate Background Service Worker (Manifest V3)
-// Handles lifecycle alarms, badge status updates, breach queries, and email/system notifications
+// Background Service Worker
+// Manages alarms, badge updates, and notification checks
 
-importScripts("../utils/crypto.js", "../utils/hibp.js", "../utils/storage.js");
+importScripts("crypto.js", "hibp.js", "storage.js");
 
 // Alarm name for periodic checks
 const ALARM_DAILY_CHECK = "passrotate_daily_audit";
@@ -72,7 +72,7 @@ async function notifyUser(alertData, settings) {
         try {
             chrome.notifications.create(`passrotate_alert_${Date.now()}`, {
                 type: "basic",
-                iconUrl: "../icons/icon128.png",
+                iconUrl: "icons/icon128.png",
                 title: alertData.title,
                 message: alertData.message,
                 priority: 2
