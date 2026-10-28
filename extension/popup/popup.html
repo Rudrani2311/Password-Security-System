@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PassRotate Security Guard</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="popup-container">
+        <!-- Header -->
+        <header class="popup-header">
+            <div class="header-brand">
+                <div class="shield-logo">🛡️</div>
+                <div>
+                    <h1 class="brand-title">PassRotate</h1>
+                    <span class="brand-tag">30-Day Rotation Policy</span>
+                </div>
+            </div>
+            <button id="btn-open-dashboard" class="icon-btn" title="Open Security Dashboard">
+                ⚙️ Dashboard
+            </button>
+        </header>
+
+        <!-- Current Tab Status Card -->
+        <section class="card current-site-card">
+            <div class="card-header-row">
+                <span class="section-label">Current Website</span>
+                <span id="site-status-pill" class="status-pill status-pill-active">Checking...</span>
+            </div>
+            <div class="site-domain-row">
+                <h2 id="current-domain-text">Detecting...</h2>
+            </div>
+            <div id="site-username-text" class="site-user-text"></div>
+
+            <!-- Expiry Progress Bar -->
+            <div id="expiry-meter-container" class="meter-wrapper" style="display: none;">
+                <div class="meter-labels">
+                    <span id="meter-days-left">30 days left</span>
+                    <span id="meter-percentage">100%</span>
+                </div>
+                <div class="meter-track">
+                    <div id="meter-fill" class="meter-fill" style="width: 100%;"></div>
+                </div>
+                <div class="meter-sub">Last updated: <span id="meter-last-date">-</span></div>
+            </div>
+
+            <!-- Action Buttons for Current Site -->
+            <div id="site-actions" class="site-actions-row" style="display: none;">
+                <button id="btn-popup-rotate" class="btn btn-primary">
+                    🔄 Rotate Password
+                </button>
+                <button id="btn-popup-forgot" class="btn btn-secondary">
+                    🔗 Forgot Password
+                </button>
+            </div>
+
+            <!-- Simulation Tools for Quick Teacher Demo -->
+            <div id="simulation-tools" class="sim-wrapper" style="display: none;">
+                <div class="sim-title">⚡ Quick Grading Simulation:</div>
+                <div class="sim-btn-row">
+                    <button id="sim-fresh" class="sim-btn" title="Set to Day 0">Day 0 (Fresh)</button>
+                    <button id="sim-warning" class="sim-btn sim-btn-warn" title="Set to Day 26 (4 days left)">Day 26 (Warn 5d)</button>
+                    <button id="sim-expired" class="sim-btn sim-btn-danger" title="Set to Day 32 (Expired)">Day 32 (Expired)</button>
+                </div>
+            </div>
+
+            <!-- Not Tracked Placeholder -->
+            <div id="untracked-card" style="display: none;">
+                <p class="untracked-desc">This website is not yet monitored under the 30-day rotation policy.</p>
+                <button id="btn-track-site" class="btn btn-primary full-width">
+                    + Track This Website
+                </button>
+            </div>
+        </section>
+
+        <!-- Quick Breach Checker (HIBP) -->
+        <section class="card breach-checker-card">
+            <span class="section-label">Dark Web Leak Checker (HIBP)</span>
+            <div class="breach-input-row">
+                <input type="password" id="breach-check-input" placeholder="Type password to check breach..." class="input-text">
+                <button id="btn-run-breach-check" class="btn btn-dark">Check</button>
+            </div>
+            <div id="breach-quick-result" class="breach-result-box" style="display: none;"></div>
+        </section>
+
+        <!-- Vault Summary Footer -->
+        <footer class="popup-footer">
+            <div class="stat-bubble">
+                <span class="stat-num" id="total-sites-count">0</span>
+                <span class="stat-lbl">Tracked Sites</span>
+            </div>
+            <div class="stat-bubble warn-bubble">
+                <span class="stat-num" id="warn-sites-count">0</span>
+                <span class="stat-lbl">Near Expiry</span>
+            </div>
+            <div class="stat-bubble danger-bubble">
+                <span class="stat-num" id="expired-sites-count">0</span>
+                <span class="stat-lbl">Expired</span>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Rotation Modal (Within popup) -->
+    <div id="popup-modal-rotate" class="modal-backdrop" style="display: none;">
+        <div class="modal-box">
+            <h3>Rotate Password for <span id="modal-domain-name"></span></h3>
+            <p class="modal-sub">Policy resets countdown for another 30 days upon saving.</p>
+
+            <div class="form-group">
+                <label>New Password:</label>
+                <input type="password" id="modal-new-password" class="input-text full-width" placeholder="Enter new password">
+                <div id="modal-breach-status" class="breach-status-hint"></div>
+            </div>
+
+            <div class="modal-btn-row">
+                <button id="btn-modal-cancel" class="btn btn-secondary">Cancel</button>
+                <button id="btn-modal-save" class="btn btn-primary">Save & Rotate</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../utils/crypto.js"></script>
+    <script src="../utils/hibp.js"></script>
+    <script src="../utils/storage.js"></script>
+    <script src="popup.js"></script>
+</body>
+</html>

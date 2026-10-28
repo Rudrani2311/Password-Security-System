@@ -1,0 +1,193 @@
+/* LearnHub Demo Site - Minimalist Blue & Times New Roman */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: "Times New Roman", Times, serif;
+    background-color: #06101e;
+    color: #e2e8f0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    font-size: 15px;
+}
+
+.auth-wrapper {
+    width: 100%;
+    max-width: 420px;
+}
+
+.auth-card {
+    background-color: #0a1728;
+    border: 1px solid #1e3a8a;
+    padding: 28px;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.brand {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.brand-badge {
+    font-size: 32px;
+    display: inline-block;
+    margin-bottom: 6px;
+}
+
+.brand h2 {
+    font-size: 22px;
+    font-weight: bold;
+    color: #ffffff;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.brand p {
+    font-size: 13px;
+    color: #93c5fd;
+    margin-top: 2px;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.demo-banner {
+    background-color: #0c1a2f;
+    border: 1px solid #2563eb;
+    padding: 10px 12px;
+    font-size: 13px;
+    line-height: 1.4;
+    color: #bfdbfe;
+    margin-bottom: 18px;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.form-group {
+    margin-bottom: 16px;
+}
+
+.form-group label {
+    display: block;
+    font-size: 13px;
+    font-weight: bold;
+    color: #dbeafe;
+    margin-bottom: 4px;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.label-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.forgot-link {
+    font-size: 13px;
+    color: #93c5fd;
+    text-decoration: underline;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.forgot-link:hover {
+    color: #ffffff;
+}
+
+input[type="text"],
+input[type="email"],
+input[type="password"] {
+    width: 100%;
+    background-color: #030a16;
+    border: 1px solid #1e3a8a;
+    padding: 10px 12px;
+    color: #ffffff;
+    font-size: 14px;
+    outline: none;
+    font-family: "Times New Roman", Times, serif;
+}
+
+input[type="text"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus {
+    border-color: #3b82f6;
+}
+
+.btn-submit {
+    width: 100%;
+    background-color: #1d4ed8;
+    border: 1px solid #3b82f6;
+    padding: 11px;
+    font-size: 15px;
+    font-weight: bold;
+    color: #ffffff;
+    cursor: pointer;
+    font-family: "Times New Roman", Times, serif;
+    margin-top: 6px;
+}
+
+.btn-submit:hover {
+    background-color: #2563eb;
+}
+
+.auth-footer {
+    margin-top: 20px;
+    text-align: center;
+    font-size: 13px;
+    color: #93c5fd;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.auth-footer a {
+    color: #bfdbfe;
+    text-decoration: underline;
+}
+
+.teacher-tip {
+    margin-top: 18px;
+    padding: 12px;
+    background-color: #0c1a2f;
+    border: 1px dashed #1e3a8a;
+    text-align: left;
+    font-size: 12px;
+    color: #bfdbfe;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.teacher-tip strong {
+    color: #ffffff;
+    display: block;
+    margin-bottom: 4px;
+}
+
+.teacher-tip ol {
+    margin-left: 18px;
+    line-height: 1.5;
+}
+
+.success-banner {
+    background-color: #0f2744;
+    border: 1px solid #3b82f6;
+    padding: 10px 12px;
+    font-size: 14px;
+    color: #bfdbfe;
+    margin-bottom: 16px;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.step-desc {
+    font-size: 13px;
+    color: #bfdbfe;
+    line-height: 1.5;
+    margin-bottom: 16px;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.breach-hint {
+    font-size: 12px;
+    color: #93c5fd;
+    margin-top: 4px;
+    font-family: "Times New Roman", Times, serif;
+}

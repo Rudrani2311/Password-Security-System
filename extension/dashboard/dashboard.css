@@ -1,0 +1,606 @@
+/* PassRotate Security Command Center Dashboard - Minimalist Blue & Times New Roman */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: "Times New Roman", Times, serif;
+    background-color: #06101e;
+    color: #e2e8f0;
+    font-size: 15px;
+    line-height: 1.5;
+    min-height: 100vh;
+}
+
+.app-layout {
+    display: flex;
+    min-height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+    width: 240px;
+    background-color: #0a1728;
+    border-right: 1px solid #1e3a8a;
+    display: flex;
+    flex-direction: column;
+    padding: 20px 14px;
+    flex-shrink: 0;
+}
+
+.sidebar-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 24px;
+    padding: 0 4px;
+}
+
+.brand-shield {
+    font-size: 24px;
+}
+
+.sidebar-brand h2 {
+    font-size: 18px;
+    font-weight: bold;
+    color: #ffffff;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.sub-brand {
+    font-size: 12px;
+    color: #93c5fd;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.nav-menu {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+}
+
+.nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    color: #bfdbfe;
+    text-decoration: none;
+    font-size: 14px;
+    font-family: "Times New Roman", Times, serif;
+    border: 1px solid transparent;
+}
+
+.nav-item:hover {
+    background-color: #0f2744;
+    color: #ffffff;
+    border-color: #1e3a8a;
+}
+
+.nav-item.active {
+    background-color: #1e3a8a;
+    color: #ffffff;
+    border-color: #3b82f6;
+    font-weight: bold;
+}
+
+.sidebar-footer {
+    padding-top: 16px;
+    border-top: 1px solid #1e3a8a;
+}
+
+.policy-badge {
+    background-color: #0c1a2f;
+    border: 1px solid #1e3a8a;
+    padding: 8px 10px;
+    font-size: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    color: #bfdbfe;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.policy-badge strong {
+    color: #ffffff;
+}
+
+/* Main Content */
+.main-content {
+    flex: 1;
+    padding: 24px 30px;
+    overflow-y: auto;
+}
+
+.topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 20px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #1e3a8a;
+}
+
+.topbar-title h1 {
+    font-size: 22px;
+    font-weight: bold;
+    color: #ffffff;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.topbar-title p {
+    font-size: 14px;
+    color: #93c5fd;
+    margin-top: 2px;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.topbar-actions {
+    display: flex;
+    gap: 8px;
+}
+
+/* Buttons */
+.btn {
+    border: 1px solid #2563eb;
+    padding: 7px 14px;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    font-family: "Times New Roman", Times, serif;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn-primary {
+    background-color: #1d4ed8;
+    color: #ffffff;
+}
+
+.btn-primary:hover {
+    background-color: #2563eb;
+}
+
+.btn-secondary {
+    background-color: #0c1a2f;
+    border: 1px solid #1e3a8a;
+    color: #dbeafe;
+}
+
+.btn-secondary:hover {
+    background-color: #1e3a8a;
+    color: #ffffff;
+}
+
+.btn-close {
+    background: transparent;
+    border: none;
+    color: #bfdbfe;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+/* Metrics Grid */
+.metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.metric-card {
+    background-color: #0a1728;
+    border: 1px solid #1e3a8a;
+    padding: 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.metric-icon {
+    width: 38px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    border: 1px solid #2563eb;
+    background-color: #0f2744;
+}
+
+.metric-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.metric-label {
+    font-size: 12px;
+    color: #93c5fd;
+    text-transform: uppercase;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.metric-value {
+    font-size: 20px;
+    font-weight: bold;
+    color: #ffffff;
+    font-family: "Times New Roman", Times, serif;
+}
+
+/* Cards */
+.card {
+    background-color: #0a1728;
+    border: 1px solid #1e3a8a;
+    padding: 20px;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.card-header {
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #1e3a8a;
+}
+
+.card-header h2 {
+    font-size: 18px;
+    font-weight: bold;
+    color: #ffffff;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.card-header p {
+    font-size: 13px;
+    color: #93c5fd;
+    margin-top: 2px;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.card-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+    gap: 12px;
+}
+
+.search-box {
+    background-color: #030a16;
+    border: 1px solid #1e3a8a;
+    padding: 8px 12px;
+    color: #ffffff;
+    font-size: 14px;
+    font-family: "Times New Roman", Times, serif;
+    width: 280px;
+    outline: none;
+}
+
+.search-box:focus {
+    border-color: #3b82f6;
+}
+
+.toolbar-hint {
+    font-size: 12px;
+    color: #93c5fd;
+    font-family: "Times New Roman", Times, serif;
+}
+
+/* Vault Table */
+.table-responsive {
+    overflow-x: auto;
+}
+
+.vault-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.vault-table th {
+    text-align: left;
+    padding: 10px 12px;
+    color: #93c5fd;
+    font-size: 12px;
+    text-transform: uppercase;
+    border-bottom: 2px solid #1e3a8a;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.vault-table td {
+    padding: 12px;
+    border-bottom: 1px solid #10243e;
+    color: #dbeafe;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.vault-table tr:hover {
+    background-color: #0c1a2f;
+}
+
+.site-name-bold {
+    font-weight: bold;
+    color: #ffffff;
+}
+
+.site-domain-sub {
+    font-size: 12px;
+    color: #93c5fd;
+}
+
+/* Status Badges */
+.status-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border: 1px solid #3b82f6;
+    font-size: 12px;
+    font-weight: bold;
+    font-family: "Times New Roman", Times, serif;
+    text-transform: uppercase;
+}
+
+.status-active {
+    background-color: #0f2744;
+    color: #93c5fd;
+    border-color: #2563eb;
+}
+
+.status-warn {
+    background-color: #172554;
+    color: #bfdbfe;
+    border-color: #60a5fa;
+}
+
+.status-expired {
+    background-color: #1e3a8a;
+    color: #ffffff;
+    border-color: #93c5fd;
+}
+
+/* Simulation Pills in Table */
+.sim-group {
+    display: flex;
+    gap: 4px;
+}
+
+.sim-pill {
+    background-color: #0c1a2f;
+    border: 1px solid #1e3a8a;
+    color: #dbeafe;
+    font-size: 12px;
+    font-weight: bold;
+    padding: 3px 6px;
+    cursor: pointer;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.sim-pill:hover {
+    background-color: #1d4ed8;
+    color: #ffffff;
+}
+
+/* Action Dropdown / Buttons */
+.table-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.btn-sm {
+    padding: 3px 7px;
+    font-size: 12px;
+}
+
+/* Breach Audit Tab */
+.audit-input-container {
+    display: flex;
+    gap: 10px;
+    max-width: 550px;
+    margin-bottom: 16px;
+}
+
+.audit-input {
+    flex: 1;
+    background-color: #030a16;
+    border: 1px solid #1e3a8a;
+    padding: 8px 12px;
+    color: #ffffff;
+    font-size: 14px;
+    font-family: "Times New Roman", Times, serif;
+    outline: none;
+}
+
+.audit-result-display {
+    max-width: 550px;
+    padding: 12px;
+    border: 1px solid #1e3a8a;
+    margin-bottom: 24px;
+    font-size: 14px;
+    background-color: #0a1728;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.k-anonymity-explainer {
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid #1e3a8a;
+}
+
+.k-anonymity-explainer h3 {
+    font-size: 15px;
+    color: #93c5fd;
+    margin-bottom: 12px;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.explainer-steps {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+}
+
+.step-card {
+    background-color: #0c1a2f;
+    border: 1px solid #1e3a8a;
+    padding: 12px;
+}
+
+.step-num {
+    display: inline-block;
+    width: 22px;
+    height: 22px;
+    background-color: #1d4ed8;
+    color: #ffffff;
+    text-align: center;
+    line-height: 22px;
+    font-weight: bold;
+    font-size: 12px;
+    margin-bottom: 8px;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.step-card h4 {
+    font-size: 14px;
+    color: #ffffff;
+    margin-bottom: 4px;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.step-card p {
+    font-size: 13px;
+    color: #bfdbfe;
+    line-height: 1.4;
+    font-family: "Times New Roman", Times, serif;
+}
+
+/* Settings Form */
+.settings-form {
+    max-width: 550px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.form-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.form-row label {
+    font-size: 13px;
+    font-weight: bold;
+    color: #dbeafe;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.toggle-row {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+    background-color: #0c1a2f;
+    border: 1px solid #1e3a8a;
+}
+
+.setting-desc {
+    font-size: 12px;
+    color: #93c5fd;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.input-text {
+    background-color: #030a16;
+    border: 1px solid #1e3a8a;
+    padding: 8px 12px;
+    color: #ffffff;
+    font-size: 14px;
+    font-family: "Times New Roman", Times, serif;
+    outline: none;
+}
+
+.full-width {
+    width: 100%;
+}
+
+/* Architecture Page */
+.architecture-content {
+    line-height: 1.6;
+    color: #dbeafe;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.architecture-content h3 {
+    font-size: 16px;
+    color: #ffffff;
+    margin-top: 16px;
+    margin-bottom: 6px;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.architecture-content p, .architecture-content li {
+    font-family: "Times New Roman", Times, serif;
+}
+
+/* Modal */
+.modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(3, 10, 22, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 999;
+}
+
+.modal-dialog {
+    background-color: #0a1728;
+    border: 1px solid #2563eb;
+    width: 450px;
+    max-width: 90vw;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 18px;
+    border-bottom: 1px solid #1e3a8a;
+}
+
+.modal-header h3 {
+    font-size: 16px;
+    color: #ffffff;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.modal-body {
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.form-group label {
+    display: block;
+    font-size: 13px;
+    font-weight: bold;
+    color: #bfdbfe;
+    margin-bottom: 4px;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.modal-footer {
+    padding: 12px 18px;
+    border-top: 1px solid #1e3a8a;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}

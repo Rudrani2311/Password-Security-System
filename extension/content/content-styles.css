@@ -1,0 +1,283 @@
+/* PassRotate In-Page Security Styles - Minimalist Blue & Times New Roman */
+
+#passrotate-warning-banner {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 2147483645 !important;
+    background-color: #0b1e36 !important;
+    color: #ffffff !important;
+    border-bottom: 2px solid #2563eb !important;
+    font-family: "Times New Roman", Times, serif !important;
+    padding: 10px 20px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    box-sizing: border-box !important;
+}
+
+#passrotate-warning-banner .passrotate-content {
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+    font-size: 15px !important;
+    line-height: 1.4 !important;
+    font-family: "Times New Roman", Times, serif !important;
+}
+
+#passrotate-warning-banner .passrotate-icon-badge {
+    background-color: #1d4ed8 !important;
+    color: #ffffff !important;
+    font-weight: bold !important;
+    font-size: 13px !important;
+    padding: 3px 8px !important;
+    border: 1px solid #93c5fd !important;
+    font-family: "Times New Roman", Times, serif !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.5px !important;
+}
+
+#passrotate-warning-banner .passrotate-actions {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+}
+
+.passrotate-btn {
+    border: 1px solid #3b82f6 !important;
+    cursor: pointer !important;
+    font-size: 14px !important;
+    font-weight: bold !important;
+    padding: 6px 12px !important;
+    font-family: "Times New Roman", Times, serif !important;
+    text-decoration: none !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+}
+
+.passrotate-btn-primary {
+    background-color: #1e40af !important;
+    color: #ffffff !important;
+}
+
+.passrotate-btn-primary:hover {
+    background-color: #1d4ed8 !important;
+}
+
+.passrotate-btn-secondary {
+    background-color: #0f172a !important;
+    color: #dbeafe !important;
+    border-color: #60a5fa !important;
+}
+
+.passrotate-btn-secondary:hover {
+    background-color: #1e293b !important;
+}
+
+.passrotate-btn-close {
+    background-color: transparent !important;
+    color: #bfdbfe !important;
+    border: none !important;
+    font-size: 16px !important;
+    padding: 4px 8px !important;
+}
+
+.passrotate-btn-close:hover {
+    color: #ffffff !important;
+}
+
+/* ========================================================== */
+/* EXPIRED LOCKOUT MODAL - Minimalist Blue & Serif           */
+/* ========================================================== */
+#passrotate-lockout-backdrop {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    background-color: rgba(10, 25, 47, 0.88) !important;
+    z-index: 2147483646 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 16px !important;
+    box-sizing: border-box !important;
+    font-family: "Times New Roman", Times, serif !important;
+}
+
+#passrotate-lockout-card {
+    background-color: #0b192c !important;
+    border: 2px solid #2563eb !important;
+    width: 100% !important;
+    max-width: 500px !important;
+    color: #ffffff !important;
+    font-family: "Times New Roman", Times, serif !important;
+    box-sizing: border-box !important;
+    padding: 0 !important;
+}
+
+.passrotate-card-header {
+    background-color: #152238 !important;
+    padding: 18px 22px !important;
+    border-bottom: 1px solid #1e3a8a !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 14px !important;
+}
+
+.passrotate-card-header .passrotate-shield-icon {
+    font-size: 26px !important;
+}
+
+.passrotate-card-header h2 {
+    margin: 0 !important;
+    font-size: 20px !important;
+    font-weight: bold !important;
+    color: #ffffff !important;
+    font-family: "Times New Roman", Times, serif !important;
+}
+
+.passrotate-card-header p {
+    margin: 2px 0 0 0 !important;
+    font-size: 14px !important;
+    color: #93c5fd !important;
+    font-family: "Times New Roman", Times, serif !important;
+}
+
+.passrotate-card-body {
+    padding: 22px !important;
+    font-family: "Times New Roman", Times, serif !important;
+}
+
+.passrotate-alert-box {
+    background-color: #102a43 !important;
+    border: 1px solid #2563eb !important;
+    padding: 12px 14px !important;
+    margin-bottom: 18px !important;
+    font-size: 15px !important;
+    line-height: 1.5 !important;
+    color: #dbeafe !important;
+    font-family: "Times New Roman", Times, serif !important;
+}
+
+.passrotate-stats-grid {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 10px !important;
+    margin-bottom: 20px !important;
+}
+
+.passrotate-stat-tile {
+    background-color: #152238 !important;
+    border: 1px solid #1e3a8a !important;
+    padding: 10px 12px !important;
+}
+
+.passrotate-stat-tile .label {
+    font-size: 12px !important;
+    text-transform: uppercase !important;
+    color: #93c5fd !important;
+    margin-bottom: 2px !important;
+    font-family: "Times New Roman", Times, serif !important;
+}
+
+.passrotate-stat-tile .value {
+    font-size: 16px !important;
+    font-weight: bold !important;
+    color: #ffffff !important;
+    font-family: "Times New Roman", Times, serif !important;
+}
+
+.passrotate-btn-danger {
+    background-color: #1d4ed8 !important;
+    color: #ffffff !important;
+    border: 1px solid #60a5fa !important;
+    width: 100% !important;
+    justify-content: center !important;
+    padding: 11px 16px !important;
+    font-size: 15px !important;
+    font-weight: bold !important;
+}
+
+.passrotate-btn-danger:hover {
+    background-color: #2563eb !important;
+}
+
+.passrotate-btn-outline {
+    background-color: transparent !important;
+    border: 1px solid #3b82f6 !important;
+    color: #bfdbfe !important;
+    width: 100% !important;
+    justify-content: center !important;
+    padding: 9px 16px !important;
+    font-size: 14px !important;
+    margin-top: 10px !important;
+}
+
+.passrotate-btn-outline:hover {
+    background-color: #172554 !important;
+    color: #ffffff !important;
+}
+
+.passrotate-rotate-form {
+    margin-top: 16px !important;
+    padding-top: 16px !important;
+    border-top: 1px solid #1e3a8a !important;
+}
+
+.passrotate-input-group {
+    margin-bottom: 12px !important;
+}
+
+.passrotate-input-group label {
+    display: block !important;
+    font-size: 13px !important;
+    font-weight: bold !important;
+    color: #bfdbfe !important;
+    margin-bottom: 4px !important;
+    font-family: "Times New Roman", Times, serif !important;
+}
+
+.passrotate-input {
+    width: 100% !important;
+    background-color: #030a16 !important;
+    border: 1px solid #1e3a8a !important;
+    padding: 9px 12px !important;
+    color: #ffffff !important;
+    font-size: 15px !important;
+    font-family: "Times New Roman", Times, serif !important;
+    outline: none !important;
+    box-sizing: border-box !important;
+}
+
+.passrotate-input:focus {
+    border-color: #3b82f6 !important;
+}
+
+.passrotate-breach-indicator {
+    margin-top: 6px !important;
+    font-size: 13px !important;
+    font-family: "Times New Roman", Times, serif !important;
+}
+
+.passrotate-breach-safe {
+    color: #93c5fd !important;
+    font-weight: bold !important;
+}
+
+.passrotate-breach-warn {
+    color: #60a5fa !important;
+    font-weight: bold !important;
+    text-decoration: underline !important;
+}
+
+.passrotate-breach-checking {
+    color: #bfdbfe !important;
+}
+
+.passrotate-field-locked {
+    border: 2px solid #2563eb !important;
+    background-color: #0b192c !important;
+}

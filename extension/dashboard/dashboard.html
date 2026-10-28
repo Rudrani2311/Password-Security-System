@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PassRotate Security Command Center</title>
+    <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+    <div class="app-layout">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                <span class="brand-shield">🛡️</span>
+                <div>
+                    <h2>PassRotate</h2>
+                    <span class="sub-brand">Security Command Center</span>
+                </div>
+            </div>
+
+            <nav class="nav-menu">
+                <a href="#vault" class="nav-item active" data-tab="vault">
+                    <span class="nav-icon">🔐</span> Password Vault
+                </a>
+                <a href="#breach-scanner" class="nav-item" data-tab="breach">
+                    <span class="nav-icon">🔍</span> Dark Web Breach Scanner
+                </a>
+                <a href="#notifications" class="nav-item" data-tab="notifications">
+                    <span class="nav-icon">📧</span> Gmail & Alerts
+                </a>
+                <a href="#help" class="nav-item" data-tab="help">
+                    <span class="nav-icon">📖</span> Project Architecture
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="policy-badge">
+                    <strong>Policy Active:</strong>
+                    <span>30-Day Rotation Limit</span>
+                    <span>5-Day Near-Expiry Alert</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Topbar -->
+            <header class="topbar">
+                <div class="topbar-title">
+                    <h1 id="page-heading">Password Vault & Lifecycle Management</h1>
+                    <p id="page-subheading">Enforcing 30-day password expiry and breach checks across all accounts</p>
+                </div>
+                <div class="topbar-actions">
+                    <button id="btn-add-site" class="btn btn-primary">
+                        + Add Website
+                    </button>
+                    <button id="btn-test-notification" class="btn btn-secondary">
+                        🔔 Test Alert
+                    </button>
+                </div>
+            </header>
+
+            <!-- Metrics Overview Cards -->
+            <section class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-icon bg-indigo">🌐</div>
+                    <div class="metric-info">
+                        <span class="metric-label">Monitored Websites</span>
+                        <span class="metric-value" id="metric-total-sites">0</span>
+                    </div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-icon bg-emerald">✅</div>
+                    <div class="metric-info">
+                        <span class="metric-label">Compliant (Active)</span>
+                        <span class="metric-value" id="metric-active-sites">0</span>
+                    </div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-icon bg-amber">⚠️</div>
+                    <div class="metric-info">
+                        <span class="metric-label">5-Day Expiry Warnings</span>
+                        <span class="metric-value" id="metric-warning-sites">0</span>
+                    </div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-icon bg-rose">🚨</div>
+                    <div class="metric-info">
+                        <span class="metric-label">Expired (Lockout)</span>
+                        <span class="metric-value" id="metric-expired-sites">0</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 1: Vault Table -->
+            <section id="tab-vault" class="tab-pane active">
+                <div class="card table-card">
+                    <div class="card-toolbar">
+                        <input type="text" id="vault-search-input" placeholder="Search websites or usernames..." class="search-box">
+                        <span class="toolbar-hint">Tip: Use the Simulation buttons to instantly demo any state for grading.</span>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="vault-table">
+                            <thead>
+                                <tr>
+                                    <th>Website / Domain</th>
+                                    <th>Account / Username</th>
+                                    <th>Last Rotated</th>
+                                    <th>Days Left</th>
+                                    <th>Status</th>
+                                    <th>Quick Simulation</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="vault-table-body">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 2: Breach Scanner -->
+            <section id="tab-breach" class="tab-pane">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Have I Been Pwned (HIBP) Dark Web Leak Auditor</h2>
+                        <p>Verify if any password has been compromised in past public database breaches.</p>
+                    </div>
+
+                    <div class="breach-audit-box">
+                        <div class="audit-input-container">
+                            <input type="password" id="full-breach-input" placeholder="Enter password to evaluate..." class="audit-input">
+                            <button id="btn-audit-check" class="btn btn-primary">Scan Database</button>
+                        </div>
+
+                        <div id="full-breach-result" class="audit-result-display" style="display: none;"></div>
+
+                        <div class="k-anonymity-explainer">
+                            <h3>How k-Anonymity Works (Teacher Explanation):</h3>
+                            <div class="explainer-steps">
+                                <div class="step-card">
+                                    <span class="step-num">1</span>
+                                    <h4>Local SHA-1 Hashing</h4>
+                                    <p>Your password is encrypted into a 40-character SHA-1 hash locally in the browser.</p>
+                                </div>
+                                <div class="step-card">
+                                    <span class="step-num">2</span>
+                                    <h4>5-Character Prefix</h4>
+                                    <p>Only the first 5 characters are sent to the HIBP API. Your full password never leaves the browser.</p>
+                                </div>
+                                <div class="step-card">
+                                    <span class="step-num">3</span>
+                                    <h4>Local Suffix Match</h4>
+                                    <p>The API returns matching suffixes. The browser compares your hash locally, preserving zero-knowledge privacy.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 3: Notifications & Gmail -->
+            <section id="tab-notifications" class="tab-pane">
+                <div class="card settings-card">
+                    <div class="card-header">
+                        <h2>Gmail & Alert Notification Preferences</h2>
+                        <p>Configure automated warnings before passwords expire</p>
+                    </div>
+
+                    <div class="settings-form">
+                        <div class="form-row">
+                            <label for="setting-email">User Email (for Expiry & Rotation Alerts):</label>
+                            <input type="email" id="setting-email" class="input-text full-width" placeholder="your.name@gmail.com">
+                        </div>
+
+                        <div class="form-row toggle-row">
+                            <div>
+                                <strong>5-Day Near-Expiry Warning Alerts</strong>
+                                <p class="setting-desc">Show notification and dispatch email 5 days prior to 30-day expiry</p>
+                            </div>
+                            <input type="checkbox" id="setting-warn-toggle" checked class="toggle-switch">
+                        </div>
+
+                        <div class="form-row toggle-row">
+                            <div>
+                                <strong>Browser System Notifications</strong>
+                                <p class="setting-desc">Trigger Chrome OS/Windows desktop notifications</p>
+                            </div>
+                            <input type="checkbox" id="setting-notify-toggle" checked class="toggle-switch">
+                        </div>
+
+                        <div class="form-row">
+                            <label for="setting-webhook">Notification Bridge / Webhook URL:</label>
+                            <input type="url" id="setting-webhook" class="input-text full-width" placeholder="http://localhost:5000/api/alert-email">
+                            <p class="setting-desc">Connects to our lightweight local notification server or third-party email service.</p>
+                        </div>
+
+                        <div class="form-actions">
+                            <button id="btn-save-settings" class="btn btn-primary">Save Preferences</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 4: Architecture & Documentation -->
+            <section id="tab-help" class="tab-pane">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Architecture & Teacher Presentation Guide</h2>
+                        <p>Comprehensive overview of how the extension enforces 30-day rotation on external sites like Coursera.</p>
+                    </div>
+
+                    <div class="architecture-content">
+                        <h3>1. The Problem Solved</h3>
+                        <p>
+                            Major websites like Coursera, GitHub, or LinkedIn do not allow external students or third-party apps to change their server-side database code.
+                            PassRotate acts as a <strong>Zero-Trust Client-Side Security Gateway</strong> in the browser that manages and enforces credentials on top of any target domain.
+                        </p>
+
+                        <h3>2. 30-Day Expiry & 5-Day Warning Flow</h3>
+                        <ul>
+                            <li><strong>Day 0 - 24 (Active):</strong> User logs in normally. The badge on the extension icon shows green check.</li>
+                            <li><strong>Day 25 - 29 (Near Expiry):</strong> The extension injects an amber alert banner at the top of the website and sends a notification to the user's Gmail.</li>
+                            <li><strong>Day 30+ (Expired):</strong> The extension activates the <strong>Lockout Gatekeeper</strong>, blocking login form submissions on the website.</li>
+                        </ul>
+
+                        <h3>3. Option 1: Forgot Password & Gmail Reset</h3>
+                        <p>
+                            When expired, the user clicks <em>"Reset via {Website} Forgot Password"</em>. The extension directs the user to the website's password reset endpoint. 
+                            The website emails a reset link to the user's Gmail. Once the new password is set, the extension verifies it against the HaveIBeenPwned database and resets the 30-day lifecycle timer.
+                        </p>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Add/Edit Site Modal -->
+    <div id="modal-site-edit" class="modal-backdrop" style="display: none;">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3 id="modal-site-title">Add Website to PassRotate</h3>
+                <button id="btn-close-site-modal" class="btn-close">✕</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="edit-site-id">
+                <div class="form-group">
+                    <label>Domain or URL (e.g., coursera.org, github.com):</label>
+                    <input type="text" id="edit-site-domain" class="input-text full-width" placeholder="coursera.org">
+                </div>
+                <div class="form-group">
+                    <label>Website Display Name:</label>
+                    <input type="text" id="edit-site-name" class="input-text full-width" placeholder="Coursera">
+                </div>
+                <div class="form-group">
+                    <label>Account Username / Email:</label>
+                    <input type="text" id="edit-site-username" class="input-text full-width" placeholder="student@gmail.com">
+                </div>
+                <div class="form-group">
+                    <label>Forgot Password Page URL (Optional):</label>
+                    <input type="url" id="edit-site-forgot-url" class="input-text full-width" placeholder="https://www.coursera.org/?authMode=resetPassword">
+                </div>
+                <div class="form-group">
+                    <label>Rotation Interval:</label>
+                    <input type="number" id="edit-site-expiry" class="input-text full-width" value="30" min="1" max="365">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-cancel-site-edit" class="btn btn-secondary">Cancel</button>
+                <button id="btn-save-site-edit" class="btn btn-primary">Save Website</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../utils/crypto.js"></script>
+    <script src="../utils/hibp.js"></script>
+    <script src="../utils/storage.js"></script>
+    <script src="dashboard.js"></script>
+</body>
+</html>

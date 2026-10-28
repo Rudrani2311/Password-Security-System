@@ -1,0 +1,394 @@
+/* PassRotate Popup - Minimalist All-Blue Palette & Times New Roman */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    width: 360px;
+    font-family: "Times New Roman", Times, serif;
+    background-color: #061121;
+    color: #e2e8f0;
+    font-size: 14px;
+    line-height: 1.4;
+    padding: 14px;
+}
+
+.popup-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* Header */
+.popup-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #1e3a8a;
+}
+
+.header-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.shield-logo {
+    font-size: 20px;
+}
+
+.brand-title {
+    font-size: 17px;
+    font-weight: bold;
+    color: #ffffff;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.brand-tag {
+    font-size: 12px;
+    color: #93c5fd;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.icon-btn {
+    background-color: #0f2744;
+    border: 1px solid #2563eb;
+    color: #dbeafe;
+    font-size: 13px;
+    padding: 4px 8px;
+    cursor: pointer;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.icon-btn:hover {
+    background-color: #1d4ed8;
+    color: #ffffff;
+}
+
+/* Cards */
+.card {
+    background-color: #0c1a2f;
+    border: 1px solid #1e3a8a;
+    padding: 12px;
+}
+
+.card-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+}
+
+.section-label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #93c5fd;
+    font-weight: bold;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.site-domain-row h2 {
+    font-size: 17px;
+    font-weight: bold;
+    color: #ffffff;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.site-user-text {
+    font-size: 13px;
+    color: #bfdbfe;
+    margin-top: 2px;
+    margin-bottom: 8px;
+    font-family: "Times New Roman", Times, serif;
+}
+
+/* Status Pill */
+.status-pill {
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border: 1px solid #3b82f6;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.status-pill-active {
+    background-color: #172554;
+    color: #93c5fd;
+    border-color: #3b82f6;
+}
+
+.status-pill-warning {
+    background-color: #1e3a8a;
+    color: #dbeafe;
+    border-color: #60a5fa;
+}
+
+.status-pill-expired {
+    background-color: #1e40af;
+    color: #ffffff;
+    border-color: #93c5fd;
+}
+
+.status-pill-untracked {
+    background-color: #0f172a;
+    color: #94a3b8;
+    border-color: #334155;
+}
+
+/* Meter */
+.meter-wrapper {
+    margin: 8px 0;
+}
+
+.meter-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    font-weight: bold;
+    margin-bottom: 4px;
+    color: #bfdbfe;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.meter-track {
+    width: 100%;
+    height: 7px;
+    background-color: #030a16;
+    border: 1px solid #1e3a8a;
+}
+
+.meter-fill {
+    height: 100%;
+    transition: width 0.3s;
+}
+
+.meter-fill-active { background-color: #3b82f6; }
+.meter-fill-warning { background-color: #60a5fa; }
+.meter-fill-expired { background-color: #1d4ed8; }
+
+.meter-sub {
+    font-size: 11px;
+    color: #93c5fd;
+    margin-top: 4px;
+    font-family: "Times New Roman", Times, serif;
+}
+
+/* Buttons */
+.site-actions-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.btn {
+    border: 1px solid #2563eb;
+    padding: 6px 10px;
+    font-size: 13px;
+    font-weight: bold;
+    cursor: pointer;
+    font-family: "Times New Roman", Times, serif;
+    text-align: center;
+}
+
+.btn-primary {
+    background-color: #1d4ed8;
+    color: #ffffff;
+}
+
+.btn-primary:hover {
+    background-color: #2563eb;
+}
+
+.btn-secondary {
+    background-color: #0f2744;
+    color: #dbeafe;
+    border-color: #3b82f6;
+}
+
+.btn-secondary:hover {
+    background-color: #1e3a8a;
+}
+
+.btn-dark {
+    background-color: #1e3a8a;
+    color: #ffffff;
+    border-color: #60a5fa;
+}
+
+.btn-dark:hover {
+    background-color: #2563eb;
+}
+
+.full-width {
+    width: 100%;
+}
+
+/* Simulation Controls */
+.sim-wrapper {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px dashed #1e3a8a;
+}
+
+.sim-title {
+    font-size: 11px;
+    color: #93c5fd;
+    font-weight: bold;
+    text-transform: uppercase;
+    margin-bottom: 5px;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.sim-btn-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 4px;
+}
+
+.sim-btn {
+    background-color: #0f2744;
+    border: 1px solid #1e3a8a;
+    color: #dbeafe;
+    font-size: 12px;
+    padding: 4px 2px;
+    cursor: pointer;
+    font-weight: bold;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.sim-btn:hover {
+    background-color: #1d4ed8;
+    color: #ffffff;
+}
+
+/* Breach Input */
+.breach-input-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.input-text {
+    flex: 1;
+    background-color: #030a16;
+    border: 1px solid #1e3a8a;
+    padding: 6px 8px;
+    color: #ffffff;
+    font-size: 13px;
+    font-family: "Times New Roman", Times, serif;
+    outline: none;
+}
+
+.input-text:focus {
+    border-color: #3b82f6;
+}
+
+.breach-result-box {
+    margin-top: 8px;
+    padding: 8px;
+    border: 1px solid #1e3a8a;
+    font-size: 13px;
+    font-family: "Times New Roman", Times, serif;
+    background-color: #0a192f;
+    color: #dbeafe;
+}
+
+.breach-result-safe {
+    border-color: #3b82f6;
+    color: #bfdbfe;
+    font-weight: bold;
+}
+
+.breach-result-danger {
+    border-color: #60a5fa;
+    color: #ffffff;
+    background-color: #1e3a8a;
+    font-weight: bold;
+}
+
+/* Footer Stats */
+.popup-footer {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 6px;
+}
+
+.stat-bubble {
+    background-color: #0c1a2f;
+    border: 1px solid #1e3a8a;
+    padding: 6px;
+    text-align: center;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.stat-num {
+    display: block;
+    font-size: 16px;
+    font-weight: bold;
+    color: #ffffff;
+}
+
+.stat-lbl {
+    font-size: 11px;
+    color: #93c5fd;
+}
+
+/* Modal */
+.modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(3, 10, 22, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+    z-index: 100;
+}
+
+.modal-box {
+    background-color: #0b192c;
+    border: 1px solid #2563eb;
+    padding: 14px;
+    width: 100%;
+    font-family: "Times New Roman", Times, serif;
+}
+
+.modal-box h3 {
+    font-size: 15px;
+    color: #ffffff;
+    margin-bottom: 2px;
+}
+
+.modal-sub {
+    font-size: 12px;
+    color: #93c5fd;
+    margin-bottom: 10px;
+}
+
+.form-group {
+    margin-bottom: 10px;
+}
+
+.form-group label {
+    display: block;
+    font-size: 12px;
+    color: #bfdbfe;
+    margin-bottom: 3px;
+    font-weight: bold;
+}
+
+.modal-btn-row {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+}
