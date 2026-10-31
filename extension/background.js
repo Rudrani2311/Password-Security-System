@@ -1,214 +1,200 @@
-// Background Service Worker
-// Manages alarms, badge updates, and notification checks
+// Password Security System — Background Service Worker
 
 importScripts("crypto.js", "hibp.js", "storage.js");
 
-// Alarm name for periodic checks
-const ALARM_DAILY_CHECK = "passrotate_daily_audit";
+const ALARM_AUDIT = "pss_periodic_audit";
 
-// Setup alarms on installation
-chrome.runtime.onInstalled.addListener(async (details) => {
-    console.log("[PassRotate] Extension installed/updated:", details.reason);
-    
-    // Create alarm to audit vault health every 6 hours
-    chrome.alarms.create(ALARM_DAILY_CHECK, {
-        periodInMinutes: 360 // Every 6 hours
-    });
-
-    // Run initial seed and audit
-    await PassRotateStorage.getVault();
-    await auditAllVaultSites();
+chrome.runtime.onInstalled.addListener(async () => {
+    console.log("[PSS] Password Security System installed.");
+    chrome.alarms.create(ALARM_AUDIT, { periodInMinutes: 360 });
+    await auditVault();
 });
 
-// Alarm trigger listener
-chrome.alarms.onAlarm.addListener(async (alarm) => {
-    if (alarm.name === ALARM_DAILY_CHECK) {
-        console.log("[PassRotate] Periodic vault security audit triggered.");
-        await auditAllVaultSites();
-    }
+chrome.alarms.onAlarm.addListener(async alarm => {
+    if (alarm.name === ALARM_AUDIT) await auditVault();
 });
 
-/**
- * Audits all sites in the vault. If any site is within 5 days of expiry or expired,
- * triggers system notifications and optional email alert webhook.
- */
-async function auditAllVaultSites() {
-    const vault = await PassRotateStorage.getVault();
-    const settings = await PassRotateStorage.getSettings();
+// ─── Tab Badge Updates ────────────────────────────────────────────────────────
 
-    let expiredCount = 0;
-    let nearExpiryCount = 0;
-
-    for (const site of vault) {
-        const statusInfo = PassRotateStorage.calculateStatus(site);
-        if (statusInfo.isExpired) {
-            expiredCount++;
-            notifyUser({
-                title: `🚨 Password Expired: ${site.siteName || site.domain}`,
-                message: `Your password has passed the 30-day rotation limit. Please rotate it immediately!`,
-                type: "EXPIRED",
-                site: site
-            }, settings);
-        } else if (statusInfo.isNearExpiry) {
-            nearExpiryCount++;
-            notifyUser({
-                title: `⚠️ 5-Day Expiry Warning: ${site.siteName || site.domain}`,
-                message: `Your password will expire in ${statusInfo.daysRemaining} days. Rotate it soon to prevent lockout.`,
-                type: "NEAR_EXPIRY",
-                site: site
-            }, settings);
-        }
-    }
-
-    return { expiredCount, nearExpiryCount };
-}
-
-/**
- * Dispatches Chrome desktop notification and sends email alert if enabled
- */
-async function notifyUser(alertData, settings) {
-    // 1. Chrome System Desktop Notification
-    if (settings.browserNotificationsEnabled) {
-        try {
-            chrome.notifications.create(`passrotate_alert_${Date.now()}`, {
-                type: "basic",
-                iconUrl: "icons/icon128.png",
-                title: alertData.title,
-                message: alertData.message,
-                priority: 2
-            });
-        } catch (e) {
-            console.warn("Notification error:", e);
-        }
-    }
-
-    // 2. Dispatch to Email Alert Webhook (optional local server bridge or email dispatch)
-    if (settings.emailAlertsEnabled && settings.userEmail && settings.webhookAlertUrl) {
-        try {
-            fetch(settings.webhookAlertUrl, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    recipientEmail: settings.userEmail,
-                    site: alertData.site.siteName || alertData.site.domain,
-                    domain: alertData.site.domain,
-                    username: alertData.site.username,
-                    alertType: alertData.type,
-                    title: alertData.title,
-                    message: alertData.message,
-                    timestamp: new Date().toISOString()
-                })
-            }).catch(err => {
-                // Ignore webhook failure if local demo server is not active
-                console.log("[PassRotate] Email alert dispatcher status:", err.message);
-            });
-        } catch (e) {
-            // Non-blocking
-        }
-    }
-}
-
-// Update icon badge when switching tabs
-chrome.tabs.onActivated.addListener(async (activeInfo) => {
+chrome.tabs.onActivated.addListener(async ({ tabId }) => {
     try {
-        const tab = await chrome.tabs.get(activeInfo.tabId);
-        if (tab && tab.url) {
-            updateTabBadge(tab.url);
-        }
-    } catch {
-        // Tab may have closed
-    }
+        const tab = await chrome.tabs.get(tabId);
+        if (tab && tab.url) await updateBadge(tab.url);
+    } catch {}
 });
 
-// Update icon badge when a tab navigates to a new URL
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-    if (changeInfo.status === "complete" && tab.url) {
-        updateTabBadge(tab.url);
-    }
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+    if (changeInfo.status === "complete" && tab.url) await updateBadge(tab.url);
 });
 
-async function updateTabBadge(url) {
+async function updateBadge(url) {
     if (!url || !url.startsWith("http")) {
         chrome.action.setBadgeText({ text: "" });
         return;
     }
-
-    const domain = PassRotateCrypto.normalizeDomain(url);
-    const site = await PassRotateStorage.getSite(domain);
-
+    const domain = PSSCrypto.normalizeDomain(url);
+    const site = await PSSStorage.getSite(domain);
     if (!site) {
         chrome.action.setBadgeText({ text: "" });
         return;
     }
-
-    const status = PassRotateStorage.calculateStatus(site);
-
-    if (status.isExpired) {
+    const s = PSSStorage.calculateStatus(site);
+    if (s.isExpired) {
         chrome.action.setBadgeText({ text: "!" });
-        chrome.action.setBadgeBackgroundColor({ color: "#EF4444" }); // Red
-    } else if (status.isNearExpiry) {
-        chrome.action.setBadgeText({ text: `${status.daysRemaining}d` });
-        chrome.action.setBadgeBackgroundColor({ color: "#F59E0B" }); // Amber
+        chrome.action.setBadgeBackgroundColor({ color: "#EF4444" });
+    } else if (s.isNearExpiry) {
+        chrome.action.setBadgeText({ text: `${s.daysRemaining}d` });
+        chrome.action.setBadgeBackgroundColor({ color: "#F59E0B" });
     } else {
         chrome.action.setBadgeText({ text: "✓" });
-        chrome.action.setBadgeBackgroundColor({ color: "#10B981" }); // Emerald Green
+        chrome.action.setBadgeBackgroundColor({ color: "#10B981" });
     }
 }
 
-// Central Message Hub
+// ─── Vault Audit + Desktop Notifications ─────────────────────────────────────
+
+async function auditVault() {
+    const vault = await PSSStorage.getVault();
+    const settings = await PSSStorage.getSettings();
+
+    for (const site of vault) {
+        const status = PSSStorage.calculateStatus(site);
+        if (status.isExpired) {
+            sendNotification(
+                `Password Expired: ${site.siteName || site.domain}`,
+                `Your password for ${site.siteName || site.domain} has expired. Login is blocked until you rotate it.`,
+                settings
+            );
+        } else if (status.isNearExpiry) {
+            sendNotification(
+                `Password Expiry Warning: ${site.siteName || site.domain}`,
+                `Your password is going to expire in ${status.daysRemaining} day${status.daysRemaining === 1 ? "" : "s"}.`,
+                settings
+            );
+        }
+    }
+}
+
+function sendNotification(title, message, settings) {
+    if (!settings || !settings.browserNotificationsEnabled) return;
+    try {
+        chrome.notifications.create(`pss_alert_${Date.now()}`, {
+            type: "basic",
+            iconUrl: "icons/icon128.png",
+            title,
+            message,
+            priority: 2
+        });
+    } catch (e) {
+        console.warn("[PSS] Notification error:", e);
+    }
+}
+
+// ─── Message Router ───────────────────────────────────────────────────────────
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     (async () => {
         try {
             switch (request.action) {
+
                 case "GET_SITE_STATUS": {
-                    const domain = PassRotateCrypto.normalizeDomain(request.domain || (sender.tab ? sender.tab.url : ""));
-                    const site = await PassRotateStorage.getSite(domain);
+                    const domain = PSSCrypto.normalizeDomain(
+                        request.domain || (sender.tab ? sender.tab.url : "")
+                    );
+                    const site = await PSSStorage.getSite(domain);
                     if (!site) {
                         sendResponse({ managed: false, domain });
                     } else {
-                        const status = PassRotateStorage.calculateStatus(site);
+                        const status = PSSStorage.calculateStatus(site);
                         sendResponse({ managed: true, site, status });
                     }
                     break;
                 }
 
-                case "CHECK_PASSWORD_BREACH": {
-                    const result = await PassRotateHIBP.checkBreach(request.password);
-                    sendResponse(result);
-                    break;
-                }
-
-                case "RECORD_PASSWORD_ROTATION": {
-                    const result = await PassRotateStorage.recordRotation(
-                        request.domain,
-                        request.newPassword,
-                        request.username
+                case "ATTEMPT_LOGIN": {
+                    const domain = PSSCrypto.normalizeDomain(
+                        request.domain || (sender.tab ? sender.tab.url : "")
+                    );
+                    const result = await PSSStorage.evaluateLoginAttempt(
+                        domain,
+                        request.password,
+                        request.username || "",
+                        request.siteName || domain
                     );
                     if (sender.tab && sender.tab.url) {
-                        updateTabBadge(sender.tab.url);
+                        await updateBadge(sender.tab.url);
                     }
                     sendResponse(result);
                     break;
                 }
 
-                case "SIMULATE_SITE_STATE": {
-                    const updatedStatus = await PassRotateStorage.simulateState(request.domain, request.targetState);
-                    if (sender.tab && sender.tab.url) {
-                        updateTabBadge(sender.tab.url);
-                    }
-                    sendResponse({ success: true, status: updatedStatus });
+                case "CHECK_BREACH": {
+                    const result = await PSHIBP.checkBreach(request.password);
+                    sendResponse(result);
                     break;
                 }
 
-                case "TRIGGER_TEST_NOTIFICATION": {
-                    const settings = await PassRotateStorage.getSettings();
-                    await notifyUser({
-                        title: request.title || "PassRotate Security Alert",
-                        message: request.message || "Password rotation alert triggered.",
-                        type: request.type || "NEAR_EXPIRY",
-                        site: request.site || { siteName: "Coursera", domain: "coursera.org" }
-                    }, settings);
+                case "VALIDATE_PASSWORD": {
+                    const result = await PSSStorage.validatePassword(
+                        request.domain,
+                        request.password,
+                        request.username || ""
+                    );
+                    sendResponse(result);
+                    break;
+                }
+
+                case "RECORD_ROTATION": {
+                    const result = await PSSStorage.recordRotation(
+                        request.domain,
+                        request.password,
+                        request.username || "",
+                        request.siteName || ""
+                    );
+                    if (sender.tab && sender.tab.url) await updateBadge(sender.tab.url);
+                    sendResponse(result);
+                    break;
+                }
+
+                case "TRACK_SITE": {
+                    const cleanDomain = PSSCrypto.normalizeDomain(request.domain);
+                    let site = await PSSStorage.getSite(cleanDomain);
+                    if (!site) {
+                        site = await PSSStorage.saveSite({
+                            domain: cleanDomain,
+                            siteName: request.siteName || cleanDomain,
+                            username: request.username || "",
+                            lastRotatedAt: new Date().toISOString()
+                        });
+                    }
+                    if (sender.tab && sender.tab.url) await updateBadge(sender.tab.url);
+                    sendResponse({ success: true, site });
+                    break;
+                }
+
+                case "GET_VAULT": {
+                    const vault = await PSSStorage.getVault();
+                    const result = vault.map(site => ({
+                        ...site,
+                        status: PSSStorage.calculateStatus(site)
+                    }));
+                    sendResponse({ vault: result });
+                    break;
+                }
+
+                case "DELETE_SITE": {
+                    await PSSStorage.deleteSite(request.domain);
                     sendResponse({ success: true });
+                    break;
+                }
+
+                case "GET_SETTINGS": {
+                    sendResponse(await PSSStorage.getSettings());
+                    break;
+                }
+
+                case "SAVE_SETTINGS": {
+                    sendResponse(await PSSStorage.saveSettings(request.settings));
                     break;
                 }
 
@@ -216,10 +202,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                     sendResponse({ error: "Unknown action" });
             }
         } catch (error) {
-            console.error("[PassRotate] Background message handler error:", error);
+            console.error("[PSS] Background error:", error);
             sendResponse({ error: error.message });
         }
     })();
-
-    return true; // Keep message channel open for async response
+    return true;
 });

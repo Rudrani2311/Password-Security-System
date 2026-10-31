@@ -1,227 +1,421 @@
-// PassRotate Storage & Vault Management
-// Stores encrypted/hashed credential metadata and rotation timestamps in chrome.storage.local
+// Password Security System — Storage & MongoDB Sync Engine
+// Syncs password hashes, history, and 30-day expiry dates with MongoDB Atlas backend + chrome.storage.local
 
-const PassRotateStorage = {
+const PSSStorage = {
     DEFAULT_EXPIRY_DAYS: 30,
     DEFAULT_WARNING_DAYS: 5,
+    CLOUD_SERVER_URL: "https://password-security-system.onrender.com",
+    LOCAL_SERVER_URL: "http://localhost:5000",
 
     /**
-     * Get all vault entries
-     * @returns {Promise<Array>}
+     * Resolves active backend URL (tries configured URL or local server, falls back to cloud server)
      */
+    async getApiEndpoints() {
+        const settings = await this.getSettings();
+        const urls = [];
+        if (settings.serverUrl) urls.push(settings.serverUrl.replace(/\/+$/, ""));
+        if (!urls.includes(this.LOCAL_SERVER_URL)) urls.push(this.LOCAL_SERVER_URL);
+        if (!urls.includes(this.CLOUD_SERVER_URL)) urls.push(this.CLOUD_SERVER_URL);
+        return urls;
+    },
+
+    async fetchBackend(path, options = {}) {
+        const endpoints = await this.getApiEndpoints();
+        for (const base of endpoints) {
+            try {
+                const controller = new AbortController();
+                const timer = setTimeout(() => controller.abort(), 3500);
+                const res = await fetch(`${base}${path}`, {
+                    ...options,
+                    signal: controller.signal
+                });
+                clearTimeout(timer);
+                if (res.ok) {
+                    return await res.json();
+                }
+            } catch {
+                // Try next endpoint
+            }
+        }
+        return null;
+    },
+
+    // ─── Local Vault Cache ────────────────────────────────────────────────────
+
     async getVault() {
         return new Promise(resolve => {
-            chrome.storage.local.get(["passrotate_vault"], result => {
-                const vault = result.passrotate_vault;
-                if (Array.isArray(vault) && vault.length > 0) {
-                    resolve(vault);
-                } else {
-                    // Seed initial demo vault entries for immediate out-of-the-box testing
-                    const initialSeeds = PassRotateStorage.getInitialSeeds();
-                    chrome.storage.local.set({ passrotate_vault: initialSeeds }, () => {
-                        resolve(initialSeeds);
-                    });
+            chrome.storage.local.get(["pss_vault"], async result => {
+                let localVault = Array.isArray(result.pss_vault) ? result.pss_vault : [];
+
+                // Sync with MongoDB backend if reachable
+                const remote = await this.fetchBackend("/api/sites");
+                if (remote && Array.isArray(remote.sites) && remote.mongoConnected) {
+                    const mergedMap = new Map();
+                    for (const item of localVault) {
+                        mergedMap.set(PSSCrypto.normalizeDomain(item.domain), item);
+                    }
+                    for (const rItem of remote.sites) {
+                        const d = PSSCrypto.normalizeDomain(rItem.domain);
+                        const existing = mergedMap.get(d) || {};
+                        const combinedHistory = Array.from(new Set([
+                            ...(existing.passwordHashHistory || []),
+                            ...(rItem.passwordHashHistory || []),
+                            ...(rItem.currentPasswordHash ? [rItem.currentPasswordHash] : [])
+                        ]));
+                        mergedMap.set(d, {
+                            ...existing,
+                            ...rItem,
+                            domain: d,
+                            passwordHashHistory: combinedHistory
+                        });
+                    }
+                    localVault = Array.from(mergedMap.values());
+                    chrome.storage.local.set({ pss_vault: localVault });
                 }
+
+                resolve(localVault);
             });
         });
     },
 
-    /**
-     * Returns default demonstration sites including Coursera, GitHub, and Localhost Demo
-     */
-    getInitialSeeds() {
-        const now = new Date();
-
-        // 1. Coursera: Set to NEAR_EXPIRY (Day 26, 4 days left)
-        const courseraRotated = new Date(now.getTime() - (26 * 24 * 60 * 60 * 1000));
-
-        // 2. Cloud / Render Demo Site: Set to EXPIRED (Day 32, expired 2 days ago)
-        const expiredRotated = new Date(now.getTime() - (32 * 24 * 60 * 60 * 1000));
-
-        // 3. GitHub: Set to FRESH / ACTIVE (Day 3, 27 days left)
-        const githubRotated = new Date(now.getTime() - (3 * 24 * 60 * 60 * 1000));
-
-        return [
-            {
-                id: "seed-coursera",
-                domain: "coursera.org",
-                siteName: "Coursera",
-                username: "student.learner@gmail.com",
-                lastRotatedAt: courseraRotated.toISOString(),
-                expiryDays: 30,
-                warningThresholdDays: 5,
-                forgotPasswordUrl: "https://www.coursera.org/?authMode=resetPassword",
-                passwordHashHistory: [],
-                notes: "Coursera Account - Near Expiry Demo"
-            },
-            {
-                id: "seed-demo",
-                domain: "onrender.com",
-                siteName: "Cloud Security Demo Portal",
-                username: "alex.demo@gmail.com",
-                lastRotatedAt: expiredRotated.toISOString(),
-                expiryDays: 30,
-                warningThresholdDays: 5,
-                forgotPasswordUrl: "/forgot-password.html",
-                passwordHashHistory: [],
-                notes: "Cloud Render Demo Portal - Expired Demo"
-            },
-            {
-                id: "seed-github",
-                domain: "github.com",
-                siteName: "GitHub",
-                username: "developer@gmail.com",
-                lastRotatedAt: githubRotated.toISOString(),
-                expiryDays: 30,
-                warningThresholdDays: 5,
-                forgotPasswordUrl: "https://github.com/password_reset",
-                passwordHashHistory: [],
-                notes: "GitHub Account - Active"
-            }
-        ];
+    async _saveVault(vault) {
+        return new Promise(resolve => {
+            chrome.storage.local.set({ pss_vault: vault }, resolve);
+        });
     },
 
-    /**
-     * Get settings
-     */
+    // ─── Settings ─────────────────────────────────────────────────────────────
+
     async getSettings() {
         return new Promise(resolve => {
-            chrome.storage.local.get(["passrotate_settings"], result => {
+            chrome.storage.local.get(["pss_settings"], result => {
                 const defaults = {
-                    userEmail: "security.user@gmail.com",
-                    emailAlertsEnabled: true,
                     browserNotificationsEnabled: true,
                     defaultExpiryDays: 30,
                     defaultWarningDays: 5,
-                    webhookAlertUrl: "https://passrotate-security-portal.onrender.com/api/alert-email"
+                    serverUrl: "http://localhost:5000"
                 };
-                resolve({ ...defaults, ...(result.passrotate_settings || {}) });
+                resolve({ ...defaults, ...(result.pss_settings || {}) });
             });
         });
     },
 
-    /**
-     * Save settings
-     */
     async saveSettings(settings) {
         return new Promise(resolve => {
-            chrome.storage.local.set({ passrotate_settings: settings }, () => {
-                resolve(settings);
-            });
+            chrome.storage.local.set({ pss_settings: settings }, () => resolve(settings));
         });
     },
 
-    /**
-     * Get site entry matching a domain or URL
-     */
-    async getSite(urlOrDomain) {
-        const domain = PassRotateCrypto.normalizeDomain(urlOrDomain);
-        const vault = await this.getVault();
-        return vault.find(entry => PassRotateCrypto.normalizeDomain(entry.domain) === domain) || null;
+    // ─── Site Lookup & Management ─────────────────────────────────────────────
+
+    async getSite(domain) {
+        const clean = PSSCrypto.normalizeDomain(domain);
+        if (!clean) return null;
+
+        // Check MongoDB backend first for freshest state
+        const remote = await this.fetchBackend(`/api/site/${encodeURIComponent(clean)}`);
+        const vault = await new Promise(r => chrome.storage.local.get(["pss_vault"], res => r(res.pss_vault || [])));
+        const localSite = vault.find(e => PSSCrypto.normalizeDomain(e.domain) === clean) || null;
+
+        if (remote && remote.managed && remote.site) {
+            const combinedHistory = Array.from(new Set([
+                ...(localSite ? localSite.passwordHashHistory || [] : []),
+                ...(remote.site.passwordHashHistory || []),
+                ...(remote.site.currentPasswordHash ? [remote.site.currentPasswordHash] : [])
+            ]));
+            const merged = {
+                ...(localSite || {}),
+                ...remote.site,
+                domain: clean,
+                passwordHashHistory: combinedHistory
+            };
+            await this.saveLocalSiteOnly(merged);
+            return merged;
+        }
+
+        return localSite;
     },
 
-    /**
-     * Save or update site entry
-     */
-    async saveSite(entry) {
-        const vault = await this.getVault();
-        const cleanDomain = PassRotateCrypto.normalizeDomain(entry.domain);
-        const existingIdx = vault.findIndex(
-            e => (entry.id && e.id === entry.id) || PassRotateCrypto.normalizeDomain(e.domain) === cleanDomain
-        );
+    async saveLocalSiteOnly(entry) {
+        const vault = await new Promise(r => chrome.storage.local.get(["pss_vault"], res => r(res.pss_vault || [])));
+        const cleanDomain = PSSCrypto.normalizeDomain(entry.domain);
+        const idx = vault.findIndex(e => PSSCrypto.normalizeDomain(e.domain) === cleanDomain);
 
         const record = {
             id: entry.id || "site_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7),
             domain: cleanDomain,
             siteName: entry.siteName || cleanDomain,
             username: entry.username || "",
+            currentPasswordHash: entry.currentPasswordHash || "",
             lastRotatedAt: entry.lastRotatedAt || new Date().toISOString(),
             expiryDays: entry.expiryDays || this.DEFAULT_EXPIRY_DAYS,
             warningThresholdDays: entry.warningThresholdDays || this.DEFAULT_WARNING_DAYS,
-            forgotPasswordUrl: entry.forgotPasswordUrl || "",
-            passwordHashHistory: entry.passwordHashHistory || [],
-            notes: entry.notes || ""
+            passwordHashHistory: entry.passwordHashHistory || []
         };
 
-        if (existingIdx >= 0) {
-            vault[existingIdx] = { ...vault[existingIdx], ...record };
+        if (idx >= 0) {
+            vault[idx] = { ...vault[idx], ...record };
         } else {
             vault.unshift(record);
         }
 
-        return new Promise(resolve => {
-            chrome.storage.local.set({ passrotate_vault: vault }, () => {
-                resolve(record);
-            });
-        });
+        await this._saveVault(vault);
+        return record;
     },
 
-    /**
-     * Delete a site from the vault
-     */
-    async deleteSite(idOrDomain) {
-        let vault = await this.getVault();
-        const clean = PassRotateCrypto.normalizeDomain(idOrDomain);
-        vault = vault.filter(e => e.id !== idOrDomain && PassRotateCrypto.normalizeDomain(e.domain) !== clean);
-        return new Promise(resolve => {
-            chrome.storage.local.set({ passrotate_vault: vault }, () => {
-                resolve(true);
-            });
-        });
+    async saveSite(entry) {
+        return this.saveLocalSiteOnly(entry);
     },
 
-    /**
-     * Record a password rotation event for a domain
-     */
-    async recordRotation(domain, newPasswordPlain, username) {
-        const site = (await this.getSite(domain)) || {
-            domain: PassRotateCrypto.normalizeDomain(domain),
-            siteName: domain,
-            username: username || ""
-        };
+    async deleteSite(domain) {
+        const clean = PSSCrypto.normalizeDomain(domain);
+        let vault = await new Promise(r => chrome.storage.local.get(["pss_vault"], res => r(res.pss_vault || [])));
+        vault = vault.filter(e => PSSCrypto.normalizeDomain(e.domain) !== clean);
+        await this._saveVault(vault);
+        await this.fetchBackend(`/api/sites/${encodeURIComponent(clean)}`, { method: "DELETE" });
+        return true;
+    },
 
-        const now = new Date();
-        const newHash = newPasswordPlain ? await PassRotateCrypto.sha256(newPasswordPlain) : null;
-        const history = site.passwordHashHistory || [];
+    // ─── Password Security Requirements (8+ chars, upper, lower, digit, special) ──
 
-        // Check password reuse (against last 3 passwords)
-        if (newHash && history.slice(-3).includes(newHash)) {
+    checkStrength(password) {
+        if (!password || password.length < 8) {
+            return { valid: false, reason: "Password must be at least 8 characters long." };
+        }
+        if (!/[A-Z]/.test(password)) {
+            return { valid: false, reason: "Password must include at least one uppercase letter (A-Z)." };
+        }
+        if (!/[a-z]/.test(password)) {
+            return { valid: false, reason: "Password must include at least one lowercase letter (a-z)." };
+        }
+        if (!/[0-9]/.test(password)) {
+            return { valid: false, reason: "Password must include at least one number (0-9)." };
+        }
+        if (!/[^A-Za-z0-9]/.test(password)) {
+            return { valid: false, reason: "Password must include at least one special character (e.g. @, #, $, !)." };
+        }
+        return { valid: true, reason: null };
+    },
+
+    // ─── Full 3-Step Password Validation (Reuse + Strength + HIBP Breach) ────
+
+    async validatePassword(domain, plainPassword, username = "") {
+        const cleanDomain = PSSCrypto.normalizeDomain(domain);
+        const newHash = await PSSCrypto.sha256(plainPassword);
+
+        // 1. Check if password was used before (Local + MongoDB)
+        const site = await this.getSite(cleanDomain);
+        if (site) {
+            const history = site.passwordHashHistory || [];
+            if (site.currentPasswordHash === newHash || history.includes(newHash)) {
+                return {
+                    valid: false,
+                    code: "REUSED",
+                    reason: "Password Not Allowed: You have used this password before. Please choose a brand new password."
+                };
+            }
+        }
+
+        const remoteReuse = await this.fetchBackend("/api/check-reuse", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ domain: cleanDomain, username, passwordHash: newHash })
+        });
+        if (remoteReuse && remoteReuse.reused) {
             return {
-                success: false,
-                message: "Password Reuse Blocked: You cannot reuse one of your last 3 passwords!"
+                valid: false,
+                code: "REUSED",
+                reason: "Password Not Allowed: This password matches one of your old passwords stored in MongoDB."
             };
         }
 
-        if (newHash) {
-            history.push(newHash);
-            if (history.length > 5) history.shift();
+        // 2. Check security complexity requirements
+        const strength = this.checkStrength(plainPassword);
+        if (!strength.valid) {
+            return {
+                valid: false,
+                code: "WEAK",
+                reason: `Password Not Allowed: ${strength.reason}`
+            };
         }
 
-        site.lastRotatedAt = now.toISOString();
-        if (username) site.username = username;
-        site.passwordHashHistory = history;
+        // 3. Check HaveIBeenPwned Data Breach API
+        const breachResult = await PSHIBP.checkBreach(plainPassword);
+        if (breachResult.breached) {
+            return {
+                valid: false,
+                code: "BREACHED",
+                reason: `Password Not Allowed: This password has appeared in ${breachResult.count.toLocaleString()} known data breaches (HaveIBeenPwned).`
+            };
+        }
 
-        await this.saveSite(site);
+        return { valid: true, code: "OK", reason: null };
+    },
 
+    // ─── Login Interception Gatekeeper ────────────────────────────────────────
+
+    /**
+     * Evaluates a login attempt when a user submits a login form on any website.
+     * Enforces:
+     *  - Expiry lockout (if site password is expired and user hasn't rotated to a valid new password)
+     *  - If user enters a new/rotated password (or first-time login), checks:
+     *      1) Not in old password history (MongoDB + local)
+     *      2) Meets 8+ char & character combination requirements
+     *      3) Not in HaveIBeenPwned data breaches
+     */
+    async evaluateLoginAttempt(domain, plainPassword, username = "", siteName = "") {
+        const cleanDomain = PSSCrypto.normalizeDomain(domain);
+        const passwordHash = await PSSCrypto.sha256(plainPassword);
+        const site = await this.getSite(cleanDomain);
+
+        if (site) {
+            const status = this.calculateStatus(site);
+
+            // Case A: User is logging in with their existing stored password
+            if (site.currentPasswordHash && site.currentPasswordHash === passwordHash) {
+                if (status.isExpired) {
+                    return {
+                        allowed: false,
+                        code: "EXPIRED",
+                        reason: `Password Not Allowed: Your password for ${site.siteName || cleanDomain} expired ${status.daysOverdue > 0 ? status.daysOverdue + " days ago" : "today"} (30-day policy). You must reset your password via "Forgot Password".`,
+                        site,
+                        status
+                    };
+                }
+
+                // Active & valid existing password
+                return {
+                    allowed: true,
+                    code: "ACTIVE",
+                    reason: null,
+                    site,
+                    status
+                };
+            }
+
+            // Case B: Site is tracked with NO hash recorded yet, and it is EXPIRED
+            if (!site.currentPasswordHash && status.isExpired) {
+                return {
+                    allowed: false,
+                    code: "EXPIRED",
+                    reason: `Password Not Allowed: Your password for ${site.siteName || cleanDomain} has expired. Please reset it via "Forgot Password".`,
+                    site,
+                    status
+                };
+            }
+
+            // Case C: User typed a DIFFERENT password on a tracked site
+            // (e.g. they just rotated their password via Forgot Password, OR they typed an old password)
+            const validation = await this.validatePassword(cleanDomain, plainPassword, username || site.username);
+            if (!validation.valid) {
+                return {
+                    allowed: false,
+                    code: validation.code,
+                    reason: validation.reason,
+                    site,
+                    status
+                };
+            }
+
+            // Passes all 3 checks! Record the new rotated password in MongoDB & local vault
+            const rotResult = await this.recordRotation(cleanDomain, plainPassword, username || site.username, siteName || site.siteName);
+            return {
+                allowed: true,
+                code: "ROTATED",
+                reason: "New password verified (not reused, meets security requirements, 0 breaches). 30-day timer reset!",
+                site: rotResult.site,
+                status: this.calculateStatus(rotResult.site)
+            };
+        }
+
+        // Case D: First-time login on an untracked website
+        // Validate the password against all 3 security rules before allowing login & tracking
+        const validation = await this.validatePassword(cleanDomain, plainPassword, username);
+        if (!validation.valid) {
+            return {
+                allowed: false,
+                code: validation.code,
+                reason: validation.reason,
+                site: null,
+                status: null
+            };
+        }
+
+        // Save to MongoDB and local vault to start the 30-day countdown
+        const rotResult = await this.recordRotation(cleanDomain, plainPassword, username, siteName || cleanDomain);
         return {
-            success: true,
-            message: `Password rotated successfully for ${site.domain}! 30-day countdown has been reset.`,
-            site: site
+            allowed: true,
+            code: "FIRST_LOGIN_TRACKED",
+            reason: null,
+            site: rotResult.site,
+            status: this.calculateStatus(rotResult.site)
         };
     },
 
-    /**
-     * Compute real-time lifecycle status of an account
-     */
+    // ─── Record Rotation ──────────────────────────────────────────────────────
+
+    async recordRotation(domain, plainPassword, username = "", siteName = "") {
+        const cleanDomain = PSSCrypto.normalizeDomain(domain);
+        const newHash = await PSSCrypto.sha256(plainPassword);
+        const nowIso = new Date().toISOString();
+
+        let site = (await this.getSite(cleanDomain)) || {
+            domain: cleanDomain,
+            siteName: siteName || cleanDomain,
+            username: username || "",
+            passwordHashHistory: []
+        };
+
+        const history = Array.isArray(site.passwordHashHistory) ? [...site.passwordHashHistory] : [];
+        if (site.currentPasswordHash && !history.includes(site.currentPasswordHash)) {
+            history.push(site.currentPasswordHash);
+        }
+        if (!history.includes(newHash)) {
+            history.push(newHash);
+        }
+        if (history.length > 15) history.splice(0, history.length - 15);
+
+        site.currentPasswordHash = newHash;
+        site.passwordHashHistory = history;
+        site.lastRotatedAt = nowIso;
+        if (username) site.username = username;
+        if (siteName) site.siteName = siteName;
+
+        const savedLocal = await this.saveLocalSiteOnly(site);
+
+        // Sync to MongoDB Atlas backend
+        await this.fetchBackend("/api/record-rotation", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                domain: cleanDomain,
+                siteName: site.siteName || cleanDomain,
+                username: site.username || "",
+                passwordHash: newHash,
+                rotatedAt: nowIso
+            })
+        });
+
+        return {
+            success: true,
+            message: `Password saved for ${cleanDomain}. 30-day expiry countdown started.`,
+            site: savedLocal
+        };
+    },
+
+    // ─── Status Calculation ───────────────────────────────────────────────────
+
     calculateStatus(entry) {
         if (!entry || !entry.lastRotatedAt) {
             return {
                 status: "ACTIVE",
-                daysRemaining: 30,
+                daysRemaining: this.DEFAULT_EXPIRY_DAYS,
+                daysOverdue: 0,
                 daysSinceRotation: 0,
                 isExpired: false,
                 isNearExpiry: false,
-                expiryDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+                expiryDate: new Date(Date.now() + this.DEFAULT_EXPIRY_DAYS * 86400000).toISOString(),
+                lastRotatedDate: new Date().toISOString()
             };
         }
 
@@ -229,26 +423,16 @@ const PassRotateStorage = {
         const lastRotated = new Date(entry.lastRotatedAt);
         const expiryDays = entry.expiryDays || this.DEFAULT_EXPIRY_DAYS;
         const warningDays = entry.warningThresholdDays || this.DEFAULT_WARNING_DAYS;
-
-        const expiryDate = new Date(lastRotated.getTime() + expiryDays * 24 * 60 * 60 * 1000);
+        const expiryDate = new Date(lastRotated.getTime() + expiryDays * 86400000);
         const msRemaining = expiryDate.getTime() - now.getTime();
-        const daysRemaining = Math.ceil(msRemaining / (1000 * 60 * 60 * 24));
-        const daysSinceRotation = Math.floor((now.getTime() - lastRotated.getTime()) / (1000 * 60 * 60 * 24));
+        const daysRemaining = Math.ceil(msRemaining / 86400000);
+        const daysSinceRotation = Math.floor((now.getTime() - lastRotated.getTime()) / 86400000);
 
-        let status = "ACTIVE";
-        let isExpired = false;
-        let isNearExpiry = false;
-
-        if (now >= expiryDate || daysRemaining <= 0) {
-            status = "EXPIRED";
-            isExpired = true;
-        } else if (daysRemaining <= warningDays) {
-            status = "NEAR_EXPIRY";
-            isNearExpiry = true;
-        }
+        const isExpired = now >= expiryDate || daysRemaining <= 0;
+        const isNearExpiry = !isExpired && daysRemaining <= warningDays;
 
         return {
-            status,
+            status: isExpired ? "EXPIRED" : isNearExpiry ? "NEAR_EXPIRY" : "ACTIVE",
             daysRemaining: isExpired ? 0 : daysRemaining,
             daysOverdue: isExpired ? Math.abs(daysRemaining) : 0,
             daysSinceRotation,
@@ -257,35 +441,7 @@ const PassRotateStorage = {
             expiryDate: expiryDate.toISOString(),
             lastRotatedDate: lastRotated.toISOString()
         };
-    },
-
-    /**
-     * Simulation tool for instant teacher testing and live grading demonstrations
-     */
-    async simulateState(domain, targetState) {
-        const site = await this.getSite(domain);
-        if (!site) return null;
-
-        const now = new Date();
-        let simulatedDate = now;
-
-        if (targetState === "EXPIRED") {
-            // Set rotated 32 days ago -> 2 days overdue
-            simulatedDate = new Date(now.getTime() - 32 * 24 * 60 * 60 * 1000);
-        } else if (targetState === "NEAR_EXPIRY") {
-            // Set rotated 26 days ago -> 4 days remaining (within 5-day warning)
-            simulatedDate = new Date(now.getTime() - 26 * 24 * 60 * 60 * 1000);
-        } else {
-            // Fresh / Active -> rotated today
-            simulatedDate = now;
-        }
-
-        site.lastRotatedAt = simulatedDate.toISOString();
-        await this.saveSite(site);
-        return this.calculateStatus(site);
     }
 };
 
-if (typeof self !== "undefined") {
-    self.PassRotateStorage = PassRotateStorage;
-}
+if (typeof self !== "undefined") self.PSSStorage = PSSStorage;

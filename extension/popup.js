@@ -1,269 +1,282 @@
-// PassRotate Popup Controller
+// Password Security System — Popup Script
+
+let currentDomain = "";
+let currentSite = null;
+let currentStatus = null;
+
+// ─── Init ──────────────────────────────────────────────────────────────────
 
 document.addEventListener("DOMContentLoaded", async () => {
-    let currentTab = null;
-    let currentDomain = "";
-    let currentSite = null;
-
-    // UI Elements
-    const domainText = document.getElementById("current-domain-text");
-    const statusPill = document.getElementById("site-status-pill");
-    const userText = document.getElementById("site-username-text");
-    const meterContainer = document.getElementById("expiry-meter-container");
-    const meterFill = document.getElementById("meter-fill");
-    const meterDaysLeft = document.getElementById("meter-days-left");
-    const meterPercentage = document.getElementById("meter-percentage");
-    const meterLastDate = document.getElementById("meter-last-date");
-    const siteActions = document.getElementById("site-actions");
-    const untrackedCard = document.getElementById("untracked-card");
-    const simTools = document.getElementById("simulation-tools");
-
-    // Modal elements
-    const rotateModal = document.getElementById("popup-modal-rotate");
-    const modalDomain = document.getElementById("modal-domain-name");
-    const modalPassword = document.getElementById("modal-new-password");
-    const modalBreachHint = document.getElementById("modal-breach-status");
-    const btnCancelModal = document.getElementById("btn-modal-cancel");
-    const btnSaveModal = document.getElementById("btn-modal-save");
-
-    // Top action
-    document.getElementById("btn-open-dashboard").addEventListener("click", () => {
-        chrome.tabs.create({ url: chrome.runtime.getURL("dashboard/dashboard.html") });
+    // Open dashboard
+    document.getElementById("btn-dashboard").addEventListener("click", () => {
+        chrome.tabs.create({ url: chrome.runtime.getURL("dashboard.html") });
     });
 
-    // 1. Detect Active Tab
-    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tabs && tabs[0] && tabs[0].url) {
-        currentTab = tabs[0];
-        currentDomain = PassRotateCrypto.normalizeDomain(currentTab.url);
-    }
-
-    if (!currentDomain || currentDomain === "newtab" || currentDomain.startsWith("chrome")) {
-        domainText.innerText = "Browser / New Tab";
-        statusPill.innerText = "STANDBY";
-        statusPill.className = "status-pill status-pill-untracked";
-        userText.innerText = "Navigate to a website (e.g. coursera.org or local demo) to inspect.";
+    // Load current tab data
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab && tab.url && tab.url.startsWith("http")) {
+        currentDomain = PSSCrypto.normalizeDomain(tab.url);
+        document.getElementById("domain-text").textContent = currentDomain;
+        loadSiteStatus();
     } else {
-        domainText.innerText = currentDomain;
-        await refreshCurrentSiteView();
+        document.getElementById("domain-text").textContent = "Not a webpage";
+        document.getElementById("status-pill").textContent = "N/A";
+        document.getElementById("status-pill").className = "pill pill-checking";
     }
 
-    // Refresh overall footer counts
-    await refreshFooterStats();
-
-    /**
-     * Refreshes view for the currently inspected domain
-     */
-    async function refreshCurrentSiteView() {
-        currentSite = await PassRotateStorage.getSite(currentDomain);
-
-        if (!currentSite) {
-            statusPill.innerText = "NOT TRACKED";
-            statusPill.className = "status-pill status-pill-untracked";
-            userText.innerText = "No rotation schedule active";
-            meterContainer.style.display = "none";
-            siteActions.style.display = "none";
-            simTools.style.display = "none";
-            untrackedCard.style.display = "block";
-            return;
-        }
-
-        untrackedCard.style.display = "none";
-        meterContainer.style.display = "block";
-        siteActions.style.display = "grid";
-        simTools.style.display = "block";
-
-        userText.innerText = currentSite.username ? `Account: ${currentSite.username}` : "Account active";
-
-        const status = PassRotateStorage.calculateStatus(currentSite);
-
-        // Update Pill
-        if (status.isExpired) {
-            statusPill.innerText = `EXPIRED (${status.daysOverdue}d overdue)`;
-            statusPill.className = "status-pill status-pill-expired";
-        } else if (status.isNearExpiry) {
-            statusPill.innerText = `WARN (${status.daysRemaining}d left)`;
-            statusPill.className = "status-pill status-pill-warning";
-        } else {
-            statusPill.innerText = `ACTIVE (${status.daysRemaining}d left)`;
-            statusPill.className = "status-pill status-pill-active";
-        }
-
-        // Update Meter
-        const totalDays = currentSite.expiryDays || 30;
-        const remaining = Math.max(0, status.daysRemaining);
-        const percent = Math.min(100, Math.round((remaining / totalDays) * 100));
-
-        meterPercentage.innerText = `${percent}%`;
-        meterDaysLeft.innerText = status.isExpired ? "0 days remaining" : `${status.daysRemaining} days remaining`;
-        meterFill.style.width = `${percent}%`;
-
-        meterFill.className = "meter-fill " + (
-            status.isExpired ? "meter-fill-expired" :
-            status.isNearExpiry ? "meter-fill-warning" : "meter-fill-active"
-        );
-
-        const d = new Date(currentSite.lastRotatedAt);
-        meterLastDate.innerText = isNaN(d.getTime()) ? "Recently" : d.toLocaleDateString();
-    }
-
-    // Button: Track this website
-    document.getElementById("btn-track-site").addEventListener("click", async () => {
-        const username = prompt(`Enter account username or email for ${currentDomain}:`, "user@gmail.com");
-        if (username !== null) {
-            await PassRotateStorage.saveSite({
-                domain: currentDomain,
-                siteName: currentDomain,
-                username: username.trim(),
-                lastRotatedAt: new Date().toISOString(),
-                expiryDays: 30,
-                warningThresholdDays: 5
-            });
-            await refreshCurrentSiteView();
-            await refreshFooterStats();
-            reloadActiveTab();
-        }
+    // Breach checker
+    document.getElementById("btn-breach-check").addEventListener("click", runBreachCheck);
+    document.getElementById("breach-input").addEventListener("keydown", e => {
+        if (e.key === "Enter") runBreachCheck();
     });
 
-    // Button: Rotate Password (Popup modal)
-    document.getElementById("btn-popup-rotate").addEventListener("click", () => {
-        if (!currentSite) return;
-        modalDomain.innerText = currentSite.siteName || currentDomain;
-        modalPassword.value = "";
-        modalBreachHint.innerHTML = "";
-        rotateModal.style.display = "flex";
-        modalPassword.focus();
-    });
-
-    // Breach check as user types in rotation modal
-    let modalBreachTimer = null;
-    modalPassword.addEventListener("input", () => {
-        const val = modalPassword.value;
-        if (!val) {
-            modalBreachHint.innerHTML = "";
-            return;
-        }
-
-        modalBreachHint.innerHTML = `<span style="color: #94a3b8;">Checking HIBP breach database...</span>`;
-        clearTimeout(modalBreachTimer);
-        modalBreachTimer = setTimeout(async () => {
-            const res = await PassRotateHIBP.checkBreach(val);
-            if (res.breached) {
-                modalBreachHint.innerHTML = `<span style="color: #ef4444; font-weight: 600;">🚨 LEAK FOUND: ${res.count.toLocaleString()} breaches! Choose another.</span>`;
-            } else {
-                modalBreachHint.innerHTML = `<span style="color: #10b981;">✅ SAFE: 0 known breaches.</span>`;
-            }
-        }, 400);
-    });
-
-    btnCancelModal.addEventListener("click", () => {
-        rotateModal.style.display = "none";
-    });
-
-    btnSaveModal.addEventListener("click", async () => {
-        const newPass = modalPassword.value;
-        if (!newPass || newPass.length < 6) {
-            alert("Please enter a new password of at least 6 characters.");
-            return;
-        }
-
-        const res = await PassRotateStorage.recordRotation(currentDomain, newPass, currentSite.username);
-        if (res.success) {
-            alert("✅ " + res.message);
-            rotateModal.style.display = "none";
-            await refreshCurrentSiteView();
-            await refreshFooterStats();
-            reloadActiveTab();
-        } else {
-            alert("⚠️ " + res.message);
-        }
-    });
-
-    // Button: Trigger Forgot Password on active tab
-    document.getElementById("btn-popup-forgot").addEventListener("click", () => {
-        if (!currentSite) return;
-        if (currentSite.forgotPasswordUrl) {
-            chrome.tabs.update(currentTab.id, { url: currentSite.forgotPasswordUrl });
-        } else if (currentDomain.includes("coursera.org")) {
-            chrome.tabs.update(currentTab.id, { url: "https://www.coursera.org/?authMode=resetPassword" });
-        } else if (currentDomain.includes("github.com")) {
-            chrome.tabs.update(currentTab.id, { url: "https://github.com/password_reset" });
-        } else {
-            alert(`Tip: Use the "Forgot Password" link on ${currentDomain} to get a reset link sent to your Gmail.`);
-        }
-    });
-
-    // Simulation Buttons for Fast Grading
-    document.getElementById("sim-fresh").addEventListener("click", async () => {
-        await PassRotateStorage.simulateState(currentDomain, "ACTIVE");
-        await refreshCurrentSiteView();
-        await refreshFooterStats();
-        reloadActiveTab();
-    });
-
-    document.getElementById("sim-warning").addEventListener("click", async () => {
-        await PassRotateStorage.simulateState(currentDomain, "NEAR_EXPIRY");
-        await refreshCurrentSiteView();
-        await refreshFooterStats();
-        reloadActiveTab();
-    });
-
-    document.getElementById("sim-expired").addEventListener("click", async () => {
-        await PassRotateStorage.simulateState(currentDomain, "EXPIRED");
-        await refreshCurrentSiteView();
-        await refreshFooterStats();
-        reloadActiveTab();
-    });
-
-    // Quick Dark Web Breach Scanner Card
-    const breachInput = document.getElementById("breach-check-input");
-    const breachResult = document.getElementById("breach-quick-result");
-    const btnBreach = document.getElementById("btn-run-breach-check");
-
-    btnBreach.addEventListener("click", async () => {
-        const pwd = breachInput.value;
-        if (!pwd) {
-            breachResult.style.display = "block";
-            breachResult.className = "breach-result-box breach-result-danger";
-            breachResult.innerText = "Please enter a password to test.";
-            return;
-        }
-
-        breachResult.style.display = "block";
-        breachResult.className = "breach-result-box";
-        breachResult.innerText = "🔍 Checking HaveIBeenPwned API (k-Anonymity)...";
-
-        const res = await PassRotateHIBP.checkBreach(pwd);
-
-        if (res.breached) {
-            breachResult.className = "breach-result-box breach-result-danger";
-            breachResult.innerHTML = `🚨 <strong>BREACH DETECTED!</strong> This password was exposed in <strong>${res.count.toLocaleString()}</strong> known data leaks. Never use this password!`;
-        } else {
-            breachResult.className = "breach-result-box breach-result-safe";
-            breachResult.innerHTML = `✅ <strong>CLEAN & SAFE!</strong> 0 breaches found for this password in public breach indexes.`;
-        }
-    });
-
-    // Refresh Footer Stats
-    async function refreshFooterStats() {
-        const vault = await PassRotateStorage.getVault();
-        let expired = 0;
-        let warning = 0;
-
-        for (const site of vault) {
-            const st = PassRotateStorage.calculateStatus(site);
-            if (st.isExpired) expired++;
-            else if (st.isNearExpiry) warning++;
-        }
-
-        document.getElementById("total-sites-count").innerText = vault.length;
-        document.getElementById("warn-sites-count").innerText = warning;
-        document.getElementById("expired-sites-count").innerText = expired;
-    }
-
-    function reloadActiveTab() {
-        if (currentTab && currentTab.id) {
-            chrome.tabs.reload(currentTab.id);
-        }
-    }
+    // Vault stats
+    loadVaultStats();
 });
+
+// ─── Site Status ───────────────────────────────────────────────────────────
+
+function loadSiteStatus() {
+    chrome.runtime.sendMessage({ action: "GET_SITE_STATUS", domain: currentDomain }, response => {
+        if (chrome.runtime.lastError || !response) return;
+
+        if (response.managed) {
+            currentSite = response.site;
+            currentStatus = response.status;
+            renderTrackedSite(response.site, response.status);
+        } else {
+            renderUntrackedSite();
+        }
+    });
+}
+
+function renderTrackedSite(site, status) {
+    const pill = document.getElementById("status-pill");
+    const meter = document.getElementById("expiry-meter");
+    const actions = document.getElementById("site-actions");
+    const untracked = document.getElementById("untracked-msg");
+
+    untracked.style.display = "none";
+    meter.style.display = "flex";
+    meter.style.flexDirection = "column";
+    meter.style.gap = "6px";
+    actions.style.display = "flex";
+
+    document.getElementById("domain-text").textContent = site.siteName || site.domain;
+    if (site.username) {
+        document.getElementById("username-text").textContent = site.username;
+    }
+
+    const expiryDays = site.expiryDays || 30;
+    const remaining = status.daysRemaining;
+    const pct = Math.max(0, Math.min(100, Math.round((remaining / expiryDays) * 100)));
+
+    document.getElementById("days-left-text").textContent =
+        status.isExpired ? `Expired (${status.daysOverdue}d overdue)` : `${remaining} day${remaining === 1 ? "" : "s"} remaining`;
+    document.getElementById("pct-text").textContent = `${pct}%`;
+    document.getElementById("last-rotated-text").textContent =
+        status.lastRotatedDate ? new Date(status.lastRotatedDate).toLocaleDateString() : "Unknown";
+
+    const fill = document.getElementById("meter-fill");
+    fill.style.width = pct + "%";
+    fill.style.background = status.isExpired ? "#ef4444" : status.isNearExpiry ? "#f59e0b" : "#10b981";
+
+    if (status.isExpired) {
+        pill.textContent = "EXPIRED";
+        pill.className = "pill pill-expired";
+    } else if (status.isNearExpiry) {
+        pill.textContent = `${remaining}d LEFT`;
+        pill.className = "pill pill-warning";
+    } else {
+        pill.textContent = "ACTIVE";
+        pill.className = "pill pill-active";
+    }
+
+    // Rotate button
+    document.getElementById("btn-rotate").addEventListener("click", () => openRotateModal(site));
+
+    // Forgot Password button
+    document.getElementById("btn-forgot").addEventListener("click", async () => {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (tab && tab.id) {
+            chrome.tabs.sendMessage(tab.id, { action: "TRIGGER_FORGOT_PASSWORD" });
+            window.close();
+        }
+    });
+}
+
+function renderUntrackedSite() {
+    const pill = document.getElementById("status-pill");
+    pill.textContent = "NOT TRACKED";
+    pill.className = "pill pill-new";
+
+    document.getElementById("expiry-meter").style.display = "none";
+    document.getElementById("site-actions").style.display = "none";
+    document.getElementById("untracked-msg").style.display = "block";
+
+    document.getElementById("btn-track-now").addEventListener("click", () => {
+        chrome.runtime.sendMessage({
+            action: "TRACK_SITE",
+            domain: currentDomain,
+            siteName: currentDomain
+        }, () => {
+            loadSiteStatus();
+            loadVaultStats();
+        });
+    });
+}
+
+// ─── Rotate Modal ──────────────────────────────────────────────────────────
+
+function openRotateModal(site) {
+    document.getElementById("modal-domain").textContent = site.siteName || site.domain;
+    document.getElementById("rotate-modal").style.display = "flex";
+
+    let debounce = null;
+    document.getElementById("modal-password").addEventListener("input", e => {
+        const val = e.target.value;
+        updateModalStrength(val);
+        clearTimeout(debounce);
+        document.getElementById("modal-breach-status").textContent = val.length >= 4 ? "Checking breach database..." : "";
+        if (val.length >= 4) {
+            debounce = setTimeout(() => {
+                chrome.runtime.sendMessage({ action: "CHECK_BREACH", password: val }, res => {
+                    if (chrome.runtime.lastError || !res) return;
+                    const el = document.getElementById("modal-breach-status");
+                    if (res.breached) {
+                        el.textContent = `🚨 Breached! Found in ${res.count.toLocaleString()} leaks`;
+                        el.style.color = "#ef4444";
+                    } else {
+                        el.textContent = "✅ Not found in breach databases";
+                        el.style.color = "#10b981";
+                    }
+                });
+            }, 500);
+        }
+    });
+
+    document.getElementById("btn-modal-close").addEventListener("click", closeRotateModal);
+    document.getElementById("btn-modal-cancel").addEventListener("click", closeRotateModal);
+    document.getElementById("btn-modal-save").addEventListener("click", () => saveRotation(site));
+}
+
+function closeRotateModal() {
+    document.getElementById("rotate-modal").style.display = "none";
+    document.getElementById("modal-password").value = "";
+    document.getElementById("modal-breach-status").textContent = "";
+    document.getElementById("modal-strength").style.display = "none";
+    document.getElementById("modal-error").style.display = "none";
+}
+
+function saveRotation(site) {
+    const pw = document.getElementById("modal-password").value;
+    const errorEl = document.getElementById("modal-error");
+    errorEl.style.display = "none";
+
+    if (!pw) {
+        showModalError("Please enter a password.");
+        return;
+    }
+
+    chrome.runtime.sendMessage(
+        { action: "VALIDATE_PASSWORD", domain: site.domain, password: pw },
+        response => {
+            if (chrome.runtime.lastError || !response) {
+                showModalError("Validation error. Please try again.");
+                return;
+            }
+            if (!response.valid) {
+                showModalError(`❌ ${response.reason}`);
+                return;
+            }
+
+            chrome.runtime.sendMessage(
+                { action: "RECORD_ROTATION", domain: site.domain, password: pw, username: site.username },
+                rotRes => {
+                    if (rotRes && rotRes.success) {
+                        closeRotateModal();
+                        loadSiteStatus();
+                        loadVaultStats();
+                        alert("✅ Password rotated successfully! 30-day countdown restarted.");
+                    } else {
+                        showModalError(rotRes ? rotRes.message : "Failed to save rotation.");
+                    }
+                }
+            );
+        }
+    );
+}
+
+function showModalError(msg) {
+    const el = document.getElementById("modal-error");
+    el.textContent = msg;
+    el.style.display = "block";
+}
+
+function updateModalStrength(password) {
+    const el = document.getElementById("modal-strength");
+    if (!password) { el.style.display = "none"; return; }
+    el.style.display = "block";
+
+    const checks = [
+        { pass: password.length >= 8,          msg: "8+ characters" },
+        { pass: /[A-Z]/.test(password),        msg: "Uppercase" },
+        { pass: /[a-z]/.test(password),        msg: "Lowercase" },
+        { pass: /[0-9]/.test(password),        msg: "Number" },
+        { pass: /[^A-Za-z0-9]/.test(password), msg: "Special char" }
+    ];
+    const passed = checks.filter(c => c.pass).length;
+    const colors = ["", "#ef4444", "#ef4444", "#f59e0b", "#22c55e", "#10b981"];
+    const labels = ["", "Very Weak", "Weak", "Fair", "Good", "Strong"];
+
+    el.innerHTML = `
+        <div style="height:4px;background:#e2e8f0;border-radius:4px;overflow:hidden;margin-bottom:4px;">
+            <div style="height:100%;width:${(passed/5)*100}%;background:${colors[passed]};border-radius:4px;transition:all 0.3s;"></div>
+        </div>
+        <span style="font-size:10px;font-weight:700;color:${colors[passed]};">${labels[passed]}</span>
+        <div style="font-size:10px;color:#64748b;margin-top:3px;">${checks.map(c => `${c.pass ? "✓" : "✗"} ${c.msg}`).join(" · ")}</div>
+    `;
+}
+
+// ─── HIBP Breach Checker ───────────────────────────────────────────────────
+
+function runBreachCheck() {
+    const pw = document.getElementById("breach-input").value;
+    const resultEl = document.getElementById("breach-result");
+
+    if (!pw) return;
+
+    resultEl.style.display = "block";
+    resultEl.className = "breach-result breach-unknown";
+    resultEl.textContent = "🔍 Checking...";
+
+    chrome.runtime.sendMessage({ action: "CHECK_BREACH", password: pw }, res => {
+        if (chrome.runtime.lastError || !res) {
+            resultEl.className = "breach-result breach-unknown";
+            resultEl.textContent = "⚠️ Could not check — try again.";
+            return;
+        }
+        if (res.breached) {
+            resultEl.className = "breach-result breach-found";
+            resultEl.textContent = `🚨 BREACHED — Found in ${res.count.toLocaleString()} known data breaches. Do NOT use this password.`;
+        } else if (res.status === "OFFLINE_CHECK_SKIPPED") {
+            resultEl.className = "breach-result breach-unknown";
+            resultEl.textContent = "⚠️ Offline — breach check skipped.";
+        } else {
+            resultEl.className = "breach-result breach-safe";
+            resultEl.textContent = "✅ SAFE — Not found in any known data breaches.";
+        }
+    });
+}
+
+// ─── Vault Stats ───────────────────────────────────────────────────────────
+
+function loadVaultStats() {
+    chrome.runtime.sendMessage({ action: "GET_VAULT" }, response => {
+        if (chrome.runtime.lastError || !response) return;
+        const vault = response.vault || [];
+        document.getElementById("total-count").textContent = vault.length;
+        document.getElementById("warn-count").textContent = vault.filter(s => s.status.isNearExpiry).length;
+        document.getElementById("expired-count").textContent = vault.filter(s => s.status.isExpired).length;
+    });
+}

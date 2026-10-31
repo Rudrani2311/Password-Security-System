@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Password Rotation & Security System",
-  "version": "1.0.0",
-  "description": "Password lifecycle management, 30-day rotation, and data breach checker.",
+  "name": "Password Security System",
+  "version": "2.0.0",
+  "description": "Enforces password expiry, reuse prevention, strength validation, and breach detection on every website.",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",

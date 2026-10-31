@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: passrotate-security-portal
+    name: password-security-system
     env: node
     plan: free
     buildCommand: npm install
