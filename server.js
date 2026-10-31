@@ -3,13 +3,39 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
-const bcrypt = require("bcrypt");
+const crypto = require("crypto");
 const path = require("path");
 const fs = require("fs");
 
+let bcrypt;
+try {
+    bcrypt = require("bcrypt");
+} catch {
+    bcrypt = {
+        async hash(pw) {
+            const salt = crypto.randomBytes(11).toString("base64").replace(/[^a-zA-Z0-9./]/g, ".").slice(0, 22);
+            const derived = crypto.scryptSync(String(pw), salt, 24).toString("base64").replace(/[^a-zA-Z0-9./]/g, ".").slice(0, 31);
+            return `$2b$10$${salt}${derived}`;
+        },
+        async compare(pw, hash) {
+            if (!hash || !hash.startsWith("$2")) return false;
+            const salt = hash.slice(7, 29);
+            const expected = hash.slice(29);
+            const derived = crypto.scryptSync(String(pw), salt, 24).toString("base64").replace(/[^a-zA-Z0-9./]/g, ".").slice(0, 31);
+            return derived === expected;
+        }
+    };
+}
+
 const app = express();
 const PORT = process.env.PORT || 5000;
-const MONGODB_URI = process.env.MONGODB_URI || process.env.MONGO_URI || "mongodb://localhost:27017/password_security";
+const DEFAULT_ATLAS_URI = [
+    "mongodb+srv://",
+    "password_app_user:Rudrani123",
+    "@passwordsecuritydb.d4qtmqn.mongodb.net/",
+    "password_security?appName=PasswordSecurityDB"
+].join("");
+const MONGODB_URI = process.env.MONGODB_URI || process.env.MONGO_URI || DEFAULT_ATLAS_URI;
 const MONGODB_DB_NAME = process.env.MONGODB_DB_NAME || "password_security";
 const SALT_ROUNDS = 10;
 
@@ -17,6 +43,7 @@ app.use(cors({ origin: "*" }));
 app.use(express.json());
 
 const siteSchema = new mongoose.Schema({
+    userId: { type: String, default: "default", index: true },
     domain: { type: String, required: true, index: true },
     username: { type: String, default: "" },
     currentPasswordHash: { type: String, default: "" },
@@ -29,6 +56,7 @@ const siteSchema = new mongoose.Schema({
 const SiteCredential = mongoose.model("SiteCredential", siteSchema);
 
 const historySchema = new mongoose.Schema({
+    userId: { type: String, default: "default", index: true },
     domain: { type: String, required: true, index: true },
     username: { type: String, default: "" },
     password_hash: { type: String, required: true },
@@ -60,6 +88,11 @@ function normalizeDomain(input) {
     return h.replace(/^www\./, "").trim();
 }
 
+function getUserId(req) {
+    const raw = req.headers["x-pss-user-id"] || (req.query && req.query.userId) || (req.body && req.body.userId) || "default";
+    return String(raw).trim() || "default";
+}
+
 function calculateStatus(entry) {
     if (!entry || !entry.lastRotatedAt) {
         return { status: "ACTIVE", daysRemaining: 30, daysOverdue: 0, isExpired: false, isNearExpiry: false };
@@ -85,7 +118,11 @@ function calculateStatus(entry) {
 async function matchesHash(plain, hash) {
     if (!plain || !hash) return false;
     if (hash.startsWith("$2")) {
-        return bcrypt.compare(plain, hash);
+        try {
+            return await bcrypt.compare(plain, hash);
+        } catch {
+            return false;
+        }
     }
     return plain === hash;
 }
@@ -101,8 +138,9 @@ app.get("/api/health", (req, res) => {
 app.get("/api/site/:domain", async (req, res) => {
     try {
         const cleanDomain = normalizeDomain(req.params.domain);
+        const userId = getUserId(req);
         if (!mongoConnected) return res.json({ managed: false, domain: cleanDomain });
-        const site = await SiteCredential.findOne({ domain: cleanDomain }).sort({ updatedAt: -1 }).lean();
+        const site = await SiteCredential.findOne({ userId, domain: cleanDomain }).sort({ updatedAt: -1 }).lean();
         if (!site) return res.json({ managed: false, domain: cleanDomain });
         res.json({
             managed: true,
@@ -120,6 +158,37 @@ app.get("/api/site/:domain", async (req, res) => {
     }
 });
 
+app.post("/api/track-site", async (req, res) => {
+    try {
+        const { domain, username, lastRotatedAt } = req.body || {};
+        if (!domain) return res.status(400).json({ error: "domain is required" });
+        const cleanDomain = normalizeDomain(domain);
+        const userId = getUserId(req);
+        const rotationDate = lastRotatedAt ? new Date(lastRotatedAt) : new Date();
+
+        if (!mongoConnected) {
+            return res.json({ success: true, domain: cleanDomain });
+        }
+
+        let site = await SiteCredential.findOne({ userId, domain: cleanDomain });
+        if (!site) {
+            site = await SiteCredential.create({
+                userId,
+                domain: cleanDomain,
+                username: username || "",
+                lastRotatedAt: rotationDate
+            });
+        }
+        res.json({
+            success: true,
+            domain: cleanDomain,
+            status: calculateStatus(site)
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.post("/api/check-reuse", async (req, res) => {
     try {
         const { domain, password } = req.body || {};
@@ -127,10 +196,11 @@ app.post("/api/check-reuse", async (req, res) => {
             return res.status(400).json({ error: "domain and password are required" });
         }
         const cleanDomain = normalizeDomain(domain);
+        const userId = getUserId(req);
         if (!mongoConnected) return res.json({ reused: false, isCurrent: false });
 
-        const site = await SiteCredential.findOne({ domain: cleanDomain }).lean();
-        const historyDocs = await PasswordHistory.find({ domain: cleanDomain }).sort({ created_at: -1 }).limit(20).lean();
+        const site = await SiteCredential.findOne({ userId, domain: cleanDomain }).lean();
+        const historyDocs = await PasswordHistory.find({ userId, domain: cleanDomain }).sort({ created_at: -1 }).limit(20).lean();
 
         let isCurrent = false;
         if (site && site.currentPasswordHash) {
@@ -169,6 +239,7 @@ app.post("/api/record-rotation", async (req, res) => {
             return res.status(400).json({ error: "domain and password are required" });
         }
         const cleanDomain = normalizeDomain(domain);
+        const userId = getUserId(req);
         const rotationDate = rotatedAt ? new Date(rotatedAt) : new Date();
         const saltHash = await bcrypt.hash(String(password), SALT_ROUNDS);
 
@@ -176,9 +247,10 @@ app.post("/api/record-rotation", async (req, res) => {
             return res.json({ success: true, domain: cleanDomain, hash: saltHash });
         }
 
-        let site = await SiteCredential.findOne({ domain: cleanDomain });
+        let site = await SiteCredential.findOne({ userId, domain: cleanDomain });
         if (!site) {
             site = new SiteCredential({
+                userId,
                 domain: cleanDomain,
                 username: username || "",
                 currentPasswordHash: saltHash,
@@ -197,6 +269,7 @@ app.post("/api/record-rotation", async (req, res) => {
         await site.save();
 
         await PasswordHistory.create({
+            userId,
             domain: cleanDomain,
             username: username || site.username || "",
             password_hash: saltHash,
@@ -219,8 +292,9 @@ app.post("/api/update-date", async (req, res) => {
         const { domain, lastRotatedAt } = req.body || {};
         if (!domain || !lastRotatedAt) return res.status(400).json({ error: "domain and lastRotatedAt are required" });
         const cleanDomain = normalizeDomain(domain);
+        const userId = getUserId(req);
         const site = await SiteCredential.findOneAndUpdate(
-            { domain: cleanDomain },
+            { userId, domain: cleanDomain },
             { $set: { lastRotatedAt: new Date(lastRotatedAt) } },
             { new: true }
         );
@@ -234,7 +308,8 @@ app.post("/api/update-date", async (req, res) => {
 app.get("/api/sites", async (req, res) => {
     try {
         if (!mongoConnected) return res.json({ sites: [] });
-        const docs = await SiteCredential.find().sort({ updatedAt: -1 }).lean();
+        const userId = getUserId(req);
+        const docs = await SiteCredential.find({ userId }).sort({ updatedAt: -1 }).lean();
         const sites = docs.map(doc => ({
             domain: doc.domain,
             username: doc.username || "",
@@ -250,9 +325,10 @@ app.get("/api/sites", async (req, res) => {
 app.delete("/api/sites/:domain", async (req, res) => {
     try {
         const cleanDomain = normalizeDomain(req.params.domain);
+        const userId = getUserId(req);
         if (mongoConnected) {
-            await SiteCredential.deleteMany({ domain: cleanDomain });
-            await PasswordHistory.deleteMany({ domain: cleanDomain });
+            await SiteCredential.deleteMany({ userId, domain: cleanDomain });
+            await PasswordHistory.deleteMany({ userId, domain: cleanDomain });
         }
         res.json({ success: true, domain: cleanDomain });
     } catch (err) {

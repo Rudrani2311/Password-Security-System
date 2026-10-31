@@ -26,29 +26,29 @@
         obs.observe(document.documentElement, { childList: true, subtree: true });
     }
 
-    // 3(ii) Near-expiry popup: "password expires in 5 days. Rotate..."
+    // Black & white notification popup for near-expiry warning
     function showExpiryBanner(days) {
         if (document.getElementById("pss-expiry-popup")) return;
         const box = document.createElement("div");
         box.id = "pss-expiry-popup";
-        box.className = "pss-popup-box pss-top-banner";
+        box.className = "pss-bw-popup pss-top-banner";
         box.textContent = `password expires in ${days} days. Rotate password.`;
         document.body.prepend(box);
     }
 
-    // 3(iii) Redirecting popup: "redirecting to ..."
+    // Black & white notification popup for redirect
     function showRedirectingPopup(targetLabel) {
         let box = document.getElementById("pss-redirect-popup");
         if (!box) {
             box = document.createElement("div");
             box.id = "pss-redirect-popup";
-            box.className = "pss-popup-box pss-bottom-popup";
+            box.className = "pss-bw-popup pss-bottom-popup";
             document.body.appendChild(box);
         }
         box.textContent = `redirecting to ${targetLabel}`;
     }
 
-    // 4. The "Password Not Allowed" popup table (only "Password Not Allowed | X" and "Reason for not allowing")
+    // Simplified light-blue & dark-blue "Password Not Allowed" popup matching the extension popup
     function showPasswordNotAllowed(reason) {
         const existing = document.getElementById("pss-not-allowed-backdrop");
         if (existing) existing.remove();
@@ -57,15 +57,13 @@
         wrapper.id = "pss-not-allowed-backdrop";
 
         wrapper.innerHTML = `
-            <table class="pss-not-allowed-table" id="pss-not-allowed-card">
-                <tr>
-                    <td>Password Not Allowed</td>
-                    <td id="pss-btn-close-x" class="pss-close-cell">X</td>
-                </tr>
-                <tr>
-                    <td colspan="2" id="pss-modal-reason">${escHtml(reason)}</td>
-                </tr>
-            </table>
+            <div class="pss-not-allowed-card" id="pss-not-allowed-card">
+                <div class="pss-na-header">
+                    <div class="pss-na-title">Password Not Allowed</div>
+                    <button type="button" id="pss-btn-close-x" class="pss-na-close" aria-label="Close">&#10005;</button>
+                </div>
+                <div class="pss-na-reason" id="pss-modal-reason">${escHtml(reason)}</div>
+            </div>
         `;
 
         document.body.appendChild(wrapper);
@@ -77,7 +75,6 @@
     }
 
     function bindInputsAndForms() {
-        // Check password while it is being entered in the login portal
         document.querySelectorAll('input[type="password"]').forEach(input => {
             if (input.dataset.pssInputBound === "1") return;
             input.dataset.pssInputBound = "1";
@@ -103,7 +100,6 @@
             });
         });
 
-        // Intercept form submission
         document.querySelectorAll("form").forEach(form => {
             if (form.dataset.pssFormBound === "1") return;
             if (!form.querySelector('input[type="password"]')) return;

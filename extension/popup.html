@@ -6,34 +6,30 @@
     <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-    <table class="popup-table">
-        <tr>
-            <td>Password expiry system</td>
-            <td id="btn-toggle-system" class="clickable">ON</td>
-        </tr>
-        <tr>
-            <td>Current website:</td>
-            <td id="current-website">-</td>
-        </tr>
-        <tr>
-            <td id="btn-password-check" class="clickable">Password check:</td>
-            <td>
-                <input type="password" id="password-check-input" placeholder="Enter password" autocomplete="off">
-            </td>
-        </tr>
-        <tr>
-            <td id="btn-track-website" class="clickable">Track website</td>
-            <td id="track-status"></td>
-        </tr>
-        <tr>
-            <td id="status-verified">Verified</td>
-            <td id="status-not-verified">Not Verified</td>
-        </tr>
-        <tr>
-            <td id="btn-settings" class="clickable">Settings</td>
-            <td></td>
-        </tr>
-    </table>
+    <div class="popup-container">
+        <div class="header-row">
+            <span class="title-text">Password expiry system</span>
+            <button type="button" id="btn-toggle-system" class="toggle-btn">ON</button>
+        </div>
+
+        <div class="info-card">
+            <span class="field-label">Current website:</span>
+            <span id="current-website" class="website-value">-</span>
+        </div>
+
+        <div class="info-card check-card">
+            <label for="password-check-input" id="btn-password-check" class="field-label clickable">Password check:</label>
+            <input type="password" id="password-check-input" placeholder="Enter password" autocomplete="off">
+            <div id="password-check-feedback" class="check-feedback"></div>
+        </div>
+
+        <div class="actions-row">
+            <button type="button" id="btn-track-website" class="primary-btn">Track website</button>
+            <button type="button" id="btn-settings" class="secondary-btn">Settings</button>
+        </div>
+        <div id="track-status" class="track-status"></div>
+    </div>
+
     <script src="crypto.js"></script>
     <script src="hibp.js"></script>
     <script src="storage.js"></script>

@@ -2,19 +2,21 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Settings</title>
+    <title>Password Security System — Settings</title>
     <link rel="stylesheet" href="dashboard.css">
 </head>
 <body>
-    <table class="settings-table">
-        <thead>
-            <tr>
-                <th>Tracked Website</th>
-                <th>Remaining Days</th>
-            </tr>
-        </thead>
-        <tbody id="vault-tbody"></tbody>
-    </table>
+    <div class="settings-wrapper">
+        <div class="settings-card">
+            <h1 class="page-title">Tracked Websites</h1>
+            <div class="list-header">
+                <span>Tracked Website</span>
+                <span>Remaining Days</span>
+            </div>
+            <div id="vault-tbody" class="site-list"></div>
+        </div>
+    </div>
+
     <script src="crypto.js"></script>
     <script src="hibp.js"></script>
     <script src="storage.js"></script>

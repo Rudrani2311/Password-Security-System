@@ -4,6 +4,22 @@ const PSSStorage = {
     CLOUD_SERVER_URL: "https://password-security-system.onrender.com",
     LOCAL_SERVER_URL: "http://localhost:5000",
 
+    async getUserId() {
+        return new Promise(resolve => {
+            chrome.storage.local.get(["pss_user_id"], result => {
+                if (result.pss_user_id) {
+                    resolve(result.pss_user_id);
+                    return;
+                }
+                const bytes = new Uint8Array(8);
+                crypto.getRandomValues(bytes);
+                const hex = Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
+                const userId = `user_${hex}`;
+                chrome.storage.local.set({ pss_user_id: userId }, () => resolve(userId));
+            });
+        });
+    },
+
     async getApiEndpoints() {
         const settings = await this.getSettings();
         const urls = [];
@@ -15,11 +31,16 @@ const PSSStorage = {
 
     async fetchBackend(path, options = {}) {
         const endpoints = await this.getApiEndpoints();
+        const userId = await this.getUserId();
+        const headers = {
+            ...(options.headers || {}),
+            "X-PSS-User-Id": userId
+        };
         for (const base of endpoints) {
             try {
                 const controller = new AbortController();
                 const timer = setTimeout(() => controller.abort(), 3500);
-                const res = await fetch(`${base}${path}`, { ...options, signal: controller.signal });
+                const res = await fetch(`${base}${path}`, { ...options, headers, signal: controller.signal });
                 clearTimeout(timer);
                 if (res.ok) return await res.json();
             } catch {}
@@ -51,15 +72,41 @@ const PSSStorage = {
         return new Promise(resolve => {
             chrome.storage.local.get(["pss_vault"], async result => {
                 let localVault = Array.isArray(result.pss_vault) ? result.pss_vault : [];
+                // Filter out legacy automated test domains
+                localVault = localVault.filter(item => {
+                    const d = PSSCrypto.normalizeDomain(item.domain);
+                    return d && !d.endsWith(".example.com");
+                });
+
                 const remote = await this.fetchBackend("/api/sites");
                 if (remote && Array.isArray(remote.sites)) {
+                    const remoteDomains = new Set(remote.sites.map(r => PSSCrypto.normalizeDomain(r.domain)));
+                    for (const item of localVault) {
+                        const d = PSSCrypto.normalizeDomain(item.domain);
+                        if (d && !remoteDomains.has(d)) {
+                            await this.fetchBackend("/api/track-site", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                    domain: d,
+                                    username: item.username || "",
+                                    lastRotatedAt: item.lastRotatedAt || new Date().toISOString()
+                                })
+                            });
+                        }
+                    }
+
                     const map = new Map();
                     for (const item of localVault) map.set(PSSCrypto.normalizeDomain(item.domain), item);
                     for (const rItem of remote.sites) {
                         const d = PSSCrypto.normalizeDomain(rItem.domain);
-                        map.set(d, { ...(map.get(d) || {}), ...rItem, domain: d });
+                        if (d && !d.endsWith(".example.com")) {
+                            map.set(d, { ...(map.get(d) || {}), ...rItem, domain: d });
+                        }
                     }
                     localVault = Array.from(map.values());
+                    chrome.storage.local.set({ pss_vault: localVault });
+                } else {
                     chrome.storage.local.set({ pss_vault: localVault });
                 }
                 resolve(localVault);
@@ -76,13 +123,13 @@ const PSSStorage = {
 
         if (remote && remote.managed && remote.site) {
             const merged = { ...(localSite || {}), ...remote.site, domain: clean };
-            await this.saveSite(merged);
+            await this.saveSite(merged, false);
             return merged;
         }
         return localSite;
     },
 
-    async saveSite(entry) {
+    async saveSite(entry, syncRemote = true) {
         const vault = await new Promise(r => chrome.storage.local.get(["pss_vault"], res => r(res.pss_vault || [])));
         const cleanDomain = PSSCrypto.normalizeDomain(entry.domain);
         const idx = vault.findIndex(e => PSSCrypto.normalizeDomain(e.domain) === cleanDomain);
@@ -98,6 +145,18 @@ const PSSStorage = {
         if (idx >= 0) vault[idx] = { ...vault[idx], ...record };
         else vault.unshift(record);
         await new Promise(r => chrome.storage.local.set({ pss_vault: vault }, r));
+
+        if (syncRemote) {
+            await this.fetchBackend("/api/track-site", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    domain: cleanDomain,
+                    username: record.username,
+                    lastRotatedAt: record.lastRotatedAt
+                })
+            });
+        }
         return record;
     },
 
@@ -153,13 +212,11 @@ const PSSStorage = {
             return { valid: false, code: "REUSED", reason: "Used before (old password)." };
         }
 
-        // 2. Check requirements (8 characters, special symbols, combination)
         const strength = this.checkStrength(plainPassword);
         if (!strength.valid) {
             return { valid: false, code: "WEAK", reason: strength.reason };
         }
 
-        // 3. Check data breach (HaveIBeenPwned API)
         const breach = await PSHIBP.checkBreach(plainPassword);
         if (breach.breached) {
             return { valid: false, code: "BREACHED", reason: "Exposed in data breach." };
@@ -178,7 +235,6 @@ const PSSStorage = {
         const shaHash = await PSSCrypto.sha256(plainPassword);
         const site = await this.getSite(cleanDomain);
 
-        // Check with MongoDB if this matches the current stored bcrypt password
         const remoteCheck = await this.fetchBackend("/api/check-reuse", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -205,7 +261,6 @@ const PSSStorage = {
             }
         }
 
-        // Validate against the 3 criteria (Old password, Requirements, Data breach)
         const validation = await this.validatePassword(cleanDomain, plainPassword);
         if (!validation.valid) {
             return {
@@ -215,7 +270,6 @@ const PSSStorage = {
             };
         }
 
-        // Validated -> Track password in MongoDB (bcrypt salt hash) & local storage
         const rot = await this.recordRotation(cleanDomain, plainPassword, username);
         return {
             allowed: true,
@@ -244,9 +298,8 @@ const PSSStorage = {
         site.lastRotatedAt = nowIso;
         if (username) site.username = username;
 
-        await this.saveSite(site);
+        await this.saveSite(site, false);
 
-        // Store bcrypt salt hash in MongoDB
         await this.fetchBackend("/api/record-rotation", {
             method: "POST",
             headers: { "Content-Type": "application/json" },

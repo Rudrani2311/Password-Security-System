@@ -5,21 +5,25 @@ document.addEventListener("DOMContentLoaded", async () => {
     const websiteEl = document.getElementById("current-website");
     const checkBtn = document.getElementById("btn-password-check");
     const checkInput = document.getElementById("password-check-input");
+    const feedbackEl = document.getElementById("password-check-feedback");
     const trackBtn = document.getElementById("btn-track-website");
     const trackStatus = document.getElementById("track-status");
-    const verifiedEl = document.getElementById("status-verified");
-    const notVerifiedEl = document.getElementById("status-not-verified");
     const settingsBtn = document.getElementById("btn-settings");
 
     const settings = await PSSStorage.getSettings();
     let enabled = settings.enabled !== false;
-    toggleEl.textContent = enabled ? "ON" : "OFF";
+    updateToggleUI(enabled);
 
     toggleEl.addEventListener("click", async () => {
         enabled = !enabled;
-        toggleEl.textContent = enabled ? "ON" : "OFF";
+        updateToggleUI(enabled);
         await PSSStorage.saveSettings({ ...settings, enabled });
     });
+
+    function updateToggleUI(isOn) {
+        toggleEl.textContent = isOn ? "ON" : "OFF";
+        toggleEl.classList.toggle("off", !isOn);
+    }
 
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab && tab.url && tab.url.startsWith("http")) {
@@ -27,18 +31,15 @@ document.addEventListener("DOMContentLoaded", async () => {
         websiteEl.textContent = currentDomain;
         const site = await PSSStorage.getSite(currentDomain);
         if (site) {
-            trackStatus.textContent = "Tracked";
-            const status = PSSStorage.calculateStatus(site);
-            setVerifiedState(!status.isExpired);
-        } else {
-            setVerifiedState(false);
+            trackBtn.textContent = "Website Tracked";
         }
     }
 
+    let checkTimer = null;
     async function runPasswordCheck() {
         const pw = checkInput.value;
         if (!pw) {
-            setVerifiedState(false);
+            feedbackEl.textContent = "";
             return;
         }
         const res = await new Promise(resolve => {
@@ -47,21 +48,29 @@ document.addEventListener("DOMContentLoaded", async () => {
                 resolve
             );
         });
-        setVerifiedState(Boolean(res && res.valid));
+        if (res && res.valid) {
+            feedbackEl.textContent = "Password meets all requirements.";
+        } else if (res && res.reason) {
+            feedbackEl.textContent = res.reason;
+        }
     }
 
     checkBtn.addEventListener("click", runPasswordCheck);
     checkInput.addEventListener("keydown", e => {
         if (e.key === "Enter") runPasswordCheck();
     });
-    checkInput.addEventListener("input", runPasswordCheck);
+    checkInput.addEventListener("input", () => {
+        clearTimeout(checkTimer);
+        checkTimer = setTimeout(runPasswordCheck, 300);
+    });
 
     trackBtn.addEventListener("click", () => {
         if (!currentDomain) return;
         chrome.runtime.sendMessage(
             { action: "TRACK_SITE", domain: currentDomain },
             () => {
-                trackStatus.textContent = "Tracked";
+                trackBtn.textContent = "Website Tracked";
+                trackStatus.textContent = `Tracking ${currentDomain} (30 days remaining)`;
             }
         );
     });
@@ -69,14 +78,4 @@ document.addEventListener("DOMContentLoaded", async () => {
     settingsBtn.addEventListener("click", () => {
         chrome.tabs.create({ url: chrome.runtime.getURL("dashboard.html") });
     });
-
-    function setVerifiedState(isVerified) {
-        if (isVerified) {
-            verifiedEl.classList.add("active-state");
-            notVerifiedEl.classList.remove("active-state");
-        } else {
-            verifiedEl.classList.remove("active-state");
-            notVerifiedEl.classList.add("active-state");
-        }
-    }
 });

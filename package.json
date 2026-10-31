@@ -3,13 +3,15 @@
   "version": "2.0.0",
   "description": "Password expiry, reuse prevention, strength validation, and breach detection extension backend.",
   "main": "server.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "start": "node server.js",
     "build": "echo Build complete",
     "test": "node tests/run-tests.js"
   },
   "dependencies": {
-    "bcrypt": "^6.0.0",
     "cors": "^2.8.6",
     "dotenv": "^18.0.4",
     "express": "^5.2.1",

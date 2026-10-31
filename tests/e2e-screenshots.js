@@ -165,31 +165,6 @@ function startTestPagesServer(port) {
     const oldPass1 = "OldPass#2025!";
     const oldPass2 = "PrevPass$2026!";
 
-    await fetch(`${BACKEND_URL}/api/sites/127.0.0.1`, { method: "DELETE" });
-    await fetch(`${BACKEND_URL}/api/sites/coursera.org`, { method: "DELETE" });
-
-    // Seed oldPass1 then oldPass2 (set to 25 days ago -> 5 days remaining)
-    await fetch(`${BACKEND_URL}/api/record-rotation`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            domain: "127.0.0.1",
-            username: "rudrani@gmail.com",
-            password: oldPass1,
-            rotatedAt: new Date(Date.now() - 60 * 86400000).toISOString()
-        })
-    });
-    await fetch(`${BACKEND_URL}/api/record-rotation`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            domain: "127.0.0.1",
-            username: "rudrani@gmail.com",
-            password: oldPass2,
-            rotatedAt: new Date(Date.now() - 25 * 86400000).toISOString()
-        })
-    });
-
     const browser = await puppeteer.launch({
         executablePath: chromePath,
         headless: false,
@@ -202,6 +177,7 @@ function startTestPagesServer(port) {
         ]
     });
 
+    let testUserId = "default";
     try {
         const swTarget = await browser.waitForTarget(
             t => t.type() === "service_worker" && t.url().includes("background.js"),
@@ -209,6 +185,36 @@ function startTestPagesServer(port) {
         );
         const extensionId = new URL(swTarget.url()).hostname;
         const page = await browser.newPage();
+
+        // Get the extension's generated userId so backend calls match the extension instance
+        await page.goto(`chrome-extension://${extensionId}/popup.html`, { waitUntil: "networkidle0" });
+        testUserId = await page.evaluate(() => window.PSSStorage.getUserId());
+        const apiHeaders = { "Content-Type": "application/json", "X-PSS-User-Id": testUserId };
+
+        await fetch(`${BACKEND_URL}/api/sites/127.0.0.1`, { method: "DELETE", headers: apiHeaders });
+        await fetch(`${BACKEND_URL}/api/sites/coursera.org`, { method: "DELETE", headers: apiHeaders });
+
+        // Seed oldPass1 then oldPass2 (set to 25 days ago -> 5 days remaining)
+        await fetch(`${BACKEND_URL}/api/record-rotation`, {
+            method: "POST",
+            headers: apiHeaders,
+            body: JSON.stringify({
+                domain: "127.0.0.1",
+                username: "rudrani@gmail.com",
+                password: oldPass1,
+                rotatedAt: new Date(Date.now() - 60 * 86400000).toISOString()
+            })
+        });
+        await fetch(`${BACKEND_URL}/api/record-rotation`, {
+            method: "POST",
+            headers: apiHeaders,
+            body: JSON.stringify({
+                domain: "127.0.0.1",
+                username: "rudrani@gmail.com",
+                password: oldPass2,
+                rotatedAt: new Date(Date.now() - 25 * 86400000).toISOString()
+            })
+        });
 
         // 1. Screenshot: 5-Day Near Expiry Popup ("password expires in 5 days. Rotate password.")
         await page.goto(`http://127.0.0.1:${TEST_SITE_PORT}/login`, { waitUntil: "networkidle0" });
@@ -219,7 +225,7 @@ function startTestPagesServer(port) {
         // 2. Screenshot: Expired Password + "redirecting to Forgot Password"
         await fetch(`${BACKEND_URL}/api/update-date`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: apiHeaders,
             body: JSON.stringify({
                 domain: "127.0.0.1",
                 lastRotatedAt: new Date(Date.now() - 32 * 86400000).toISOString()
@@ -284,7 +290,7 @@ function startTestPagesServer(port) {
         // 7. Screenshot: Settings Page (Only tracked websites & remaining days)
         await fetch(`${BACKEND_URL}/api/record-rotation`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: apiHeaders,
             body: JSON.stringify({
                 domain: "coursera.org",
                 username: "rudrani@gmail.com",
@@ -308,7 +314,7 @@ function startTestPagesServer(port) {
         const reqBody1 = { domain: "coursera.org", username: "rudrani@gmail.com", password: "Rudrani$NewPass#2026!" };
         const res1 = await fetch(`${BACKEND_URL}/api/record-rotation`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: apiHeaders,
             body: JSON.stringify(reqBody1)
         });
         const data1 = await res1.json();
@@ -330,7 +336,7 @@ function startTestPagesServer(port) {
         const reqBody2 = { domain: "coursera.org", password: "Rudrani$NewPass#2026!" };
         const res2 = await fetch(`${BACKEND_URL}/api/check-reuse`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: apiHeaders,
             body: JSON.stringify(reqBody2)
         });
         const data2 = await res2.json();
@@ -351,7 +357,7 @@ function startTestPagesServer(port) {
 
     } finally {
         for (const d of ["127.0.0.1", "coursera.org"]) {
-            try { await fetch(`${BACKEND_URL}/api/sites/${d}`, { method: "DELETE" }); } catch {}
+            try { await fetch(`${BACKEND_URL}/api/sites/${d}`, { method: "DELETE", headers: { "X-PSS-User-Id": testUserId } }); } catch {}
         }
         await browser.close();
         siteServer.close();
