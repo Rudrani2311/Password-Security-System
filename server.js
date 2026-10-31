@@ -454,7 +454,11 @@ app.delete("/api/sites/:domain", async (req, res) => {
 app.get("/download-extension", (req, res) => {
     const zipPath = path.join(__dirname, "password-security-extension.zip");
     if (fs.existsSync(zipPath)) {
-        res.download(zipPath, "password-security-extension.zip");
+        const buffer = fs.readFileSync(zipPath);
+        res.setHeader("Content-Type", "application/zip");
+        res.setHeader("Content-Disposition", 'attachment; filename="password-security-extension.zip"');
+        res.setHeader("Content-Length", buffer.length);
+        res.end(buffer);
     } else {
         res.status(404).json({ error: "Extension zip package not found" });
     }
