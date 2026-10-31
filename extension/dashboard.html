@@ -2,198 +2,22 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Password Security System — Dashboard</title>
+    <title>Settings</title>
     <link rel="stylesheet" href="dashboard.css">
 </head>
 <body>
-<div class="dash-layout">
-
-    <!-- Sidebar -->
-    <aside class="sidebar">
-        <div class="sidebar-brand">
-            <span class="sidebar-icon">🛡️</span>
-            <div>
-                <div class="sidebar-title">Password Security System</div>
-                <div class="sidebar-sub">Security Dashboard</div>
-            </div>
-        </div>
-        <nav class="sidebar-nav">
-            <button class="nav-item active" data-tab="vault">🗄 Vault</button>
-            <button class="nav-item" data-tab="checker">🔍 Breach Checker</button>
-            <button class="nav-item" data-tab="settings">⚙️ Settings</button>
-        </nav>
-    </aside>
-
-    <!-- Main Content -->
-    <main class="dash-main">
-
-        <!-- ── Vault Tab ─────────────────────────────────────────── -->
-        <section id="tab-vault" class="tab-content active">
-            <div class="tab-header">
-                <h2>Password Vault</h2>
-                <div class="tab-header-actions">
-                    <button id="btn-add-site" class="btn btn-primary">+ Add Site</button>
-                </div>
-            </div>
-
-            <!-- Summary cards -->
-            <div class="summary-grid" id="summary-grid">
-                <div class="summary-card summary-total">
-                    <div class="sc-num" id="sc-total">0</div>
-                    <div class="sc-lbl">Total Tracked</div>
-                </div>
-                <div class="summary-card summary-active">
-                    <div class="sc-num" id="sc-active">0</div>
-                    <div class="sc-lbl">Active</div>
-                </div>
-                <div class="summary-card summary-warn">
-                    <div class="sc-num" id="sc-warn">0</div>
-                    <div class="sc-lbl">Near Expiry</div>
-                </div>
-                <div class="summary-card summary-expired">
-                    <div class="sc-num" id="sc-expired">0</div>
-                    <div class="sc-lbl">Expired</div>
-                </div>
-            </div>
-
-            <!-- Vault table -->
-            <div class="vault-table-wrap">
-                <table class="vault-table">
-                    <thead>
-                        <tr>
-                            <th>Site</th>
-                            <th>Account</th>
-                            <th>Last Rotated</th>
-                            <th>Expiry</th>
-                            <th>Status</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="vault-tbody">
-                        <tr id="vault-empty-row">
-                            <td colspan="6" class="empty-msg">No sites tracked yet. Log in to any website and it will be added automatically.</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </section>
-
-        <!-- ── Breach Checker Tab ─────────────────────────────────── -->
-        <section id="tab-checker" class="tab-content">
-            <div class="tab-header">
-                <h2>Breach Checker</h2>
-            </div>
-            <div class="checker-card">
-                <p class="checker-desc">
-                    Check if a password has been exposed in known data breaches using the
-                    <strong>HaveIBeenPwned</strong> API. Your password is <strong>never sent</strong> over the
-                    network — only the first 5 characters of its SHA-1 hash are used (k-Anonymity model).
-                </p>
-                <div class="checker-input-row">
-                    <input type="password" id="checker-password" class="text-input" placeholder="Enter password to check..." autocomplete="off">
-                    <button id="btn-check-breach" class="btn btn-primary">Check Now</button>
-                </div>
-                <div id="checker-result" class="checker-result" style="display:none;"></div>
-
-                <div class="checker-info">
-                    <h4>How It Works</h4>
-                    <ol>
-                        <li>The password is hashed locally using SHA-1.</li>
-                        <li>Only the first 5 hex characters are sent to HIBP's API.</li>
-                        <li>HIBP returns all hashes with that prefix — matching is done locally.</li>
-                        <li>Your full password never leaves your device.</li>
-                    </ol>
-                </div>
-            </div>
-        </section>
-
-        <!-- ── Settings Tab ───────────────────────────────────────── -->
-        <section id="tab-settings" class="tab-content">
-            <div class="tab-header">
-                <h2>Settings</h2>
-            </div>
-            <div class="settings-card">
-                <div class="settings-section">
-                    <h3>Policy Configuration</h3>
-                    <div class="form-group">
-                        <label>Password Expiry Period (days)</label>
-                        <input type="number" id="setting-expiry" class="text-input" min="7" max="365" value="30">
-                        <span class="form-hint">How many days before a password is considered expired.</span>
-                    </div>
-                    <div class="form-group">
-                        <label>Near-Expiry Warning Threshold (days)</label>
-                        <input type="number" id="setting-warning" class="text-input" min="1" max="30" value="5">
-                        <span class="form-hint">Show a warning banner this many days before expiry.</span>
-                    </div>
-                </div>
-
-                <div class="settings-section">
-                    <h3>Notifications</h3>
-                    <div class="toggle-group">
-                        <label class="toggle-label">
-                            <input type="checkbox" id="setting-notifs" checked>
-                            <span>Browser notifications for expiring passwords</span>
-                        </label>
-                    </div>
-                </div>
-
-                <div class="settings-section">
-                    <h3>Backend (MongoDB)</h3>
-                    <div class="form-group">
-                        <label>Local Server URL</label>
-                        <input type="text" id="setting-server" class="text-input" value="http://localhost:5000" placeholder="http://localhost:5000">
-                        <span class="form-hint">The Node.js server URL for MongoDB password history sync.</span>
-                    </div>
-                    <button id="btn-test-server" class="btn btn-outline" style="margin-top:8px;">Test Connection</button>
-                    <div id="server-test-result" class="server-result" style="display:none;"></div>
-                </div>
-
-                <div class="settings-section">
-                    <h3>Data Management</h3>
-                    <button id="btn-clear-vault" class="btn btn-danger">🗑 Clear Entire Vault</button>
-                    <span class="form-hint" style="display:block;margin-top:6px;">This will delete all tracked sites and password history.</span>
-                </div>
-
-                <div class="settings-footer">
-                    <button id="btn-save-settings" class="btn btn-primary">Save Settings</button>
-                    <span id="settings-saved-msg" class="settings-saved-msg" style="display:none;">✅ Settings saved!</span>
-                </div>
-            </div>
-        </section>
-
-    </main>
-</div>
-
-<!-- Add Site Modal -->
-<div id="add-site-modal" class="modal-backdrop" style="display:none;">
-    <div class="modal-card">
-        <div class="modal-header">
-            <h3>Add Site to Vault</h3>
-            <button id="btn-add-modal-close" class="icon-btn">✕</button>
-        </div>
-        <div class="form-group">
-            <label>Domain (e.g. linkedin.com)</label>
-            <input type="text" id="add-domain" class="text-input" placeholder="example.com">
-        </div>
-        <div class="form-group">
-            <label>Site Name</label>
-            <input type="text" id="add-sitename" class="text-input" placeholder="LinkedIn">
-        </div>
-        <div class="form-group">
-            <label>Username / Email</label>
-            <input type="text" id="add-username" class="text-input" placeholder="you@email.com">
-        </div>
-        <div class="modal-btns">
-            <button id="btn-add-cancel" class="btn btn-outline">Cancel</button>
-            <button id="btn-add-confirm" class="btn btn-primary">Add Site</button>
-        </div>
-        <div id="add-modal-error" class="modal-error" style="display:none;"></div>
-    </div>
-</div>
-
-<script src="crypto.js"></script>
-<script src="hibp.js"></script>
-<script src="storage.js"></script>
-<script src="dashboard.js"></script>
+    <table class="settings-table">
+        <thead>
+            <tr>
+                <th>Tracked Website</th>
+                <th>Remaining Days</th>
+            </tr>
+        </thead>
+        <tbody id="vault-tbody"></tbody>
+    </table>
+    <script src="crypto.js"></script>
+    <script src="hibp.js"></script>
+    <script src="storage.js"></script>
+    <script src="dashboard.js"></script>
 </body>
 </html>

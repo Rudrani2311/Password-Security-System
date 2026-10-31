@@ -2,114 +2,41 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Password Security System</title>
     <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-<div class="popup-container">
-
-    <!-- Header -->
-    <header class="popup-header">
-        <div class="header-brand">
-            <div class="brand-icon">🛡️</div>
-            <div>
-                <h1 class="brand-title">Password Security System</h1>
-                <span class="brand-sub">30-Day Rotation Policy</span>
-            </div>
-        </div>
-        <button id="btn-dashboard" class="icon-btn" title="Open Dashboard">⚙️</button>
-    </header>
-
-    <!-- Current Site Status -->
-    <section class="card" id="current-site-card">
-        <div class="card-row">
-            <span class="label">Current Website</span>
-            <span id="status-pill" class="pill pill-checking">Checking...</span>
-        </div>
-        <h2 id="domain-text" class="domain-text">Detecting...</h2>
-        <div id="username-text" class="username-text"></div>
-
-        <!-- Expiry Meter (shown when tracked) -->
-        <div id="expiry-meter" style="display:none;">
-            <div class="meter-labels">
-                <span id="days-left-text">30 days left</span>
-                <span id="pct-text">100%</span>
-            </div>
-            <div class="meter-track">
-                <div id="meter-fill" class="meter-fill" style="width:100%;"></div>
-            </div>
-            <div class="meter-sub">Last rotated: <span id="last-rotated-text">—</span></div>
-        </div>
-
-        <!-- Actions (tracked site) -->
-        <div id="site-actions" style="display:none;">
-            <button id="btn-rotate" class="btn btn-primary">🔄 Rotate Password</button>
-            <button id="btn-forgot" class="btn btn-outline">🔗 Forgot Password</button>
-        </div>
-
-        <!-- Untracked -->
-        <div id="untracked-msg" style="display:none;">
-            <p class="untracked-text">This website is not yet tracked. Log in normally and it will be added automatically.</p>
-            <button id="btn-track-now" class="btn btn-primary full-w">+ Track This Website Now</button>
-        </div>
-    </section>
-
-    <!-- HIBP Breach Checker -->
-    <section class="card">
-        <span class="label">Breach Check (HaveIBeenPwned)</span>
-        <div class="breach-row">
-            <input type="password" id="breach-input" class="text-input" placeholder="Enter a password to check...">
-            <button id="btn-breach-check" class="btn btn-dark">Check</button>
-        </div>
-        <div id="breach-result" class="breach-result" style="display:none;"></div>
-    </section>
-
-    <!-- Footer stats -->
-    <footer class="popup-footer">
-        <div class="stat">
-            <span class="stat-num" id="total-count">0</span>
-            <span class="stat-lbl">Tracked</span>
-        </div>
-        <div class="stat warn-stat">
-            <span class="stat-num" id="warn-count">0</span>
-            <span class="stat-lbl">Near Expiry</span>
-        </div>
-        <div class="stat danger-stat">
-            <span class="stat-num" id="expired-count">0</span>
-            <span class="stat-lbl">Expired</span>
-        </div>
-    </footer>
-
-</div>
-
-<!-- Inline Rotate Modal -->
-<div id="rotate-modal" class="modal-backdrop" style="display:none;">
-    <div class="modal-card">
-        <div class="modal-header">
-            <h3>Rotate Password</h3>
-            <button id="btn-modal-close" class="icon-btn">✕</button>
-        </div>
-        <p class="modal-sub">Site: <strong id="modal-domain"></strong></p>
-
-        <div class="form-group">
-            <label>New Password</label>
-            <input type="password" id="modal-password" class="text-input full-w" placeholder="Enter new password">
-            <div id="modal-strength" class="strength-wrap" style="display:none;"></div>
-            <div id="modal-breach-status" class="breach-hint"></div>
-        </div>
-
-        <div class="modal-btns">
-            <button id="btn-modal-cancel" class="btn btn-outline">Cancel</button>
-            <button id="btn-modal-save" class="btn btn-primary">Save & Rotate</button>
-        </div>
-        <div id="modal-error" class="modal-error" style="display:none;"></div>
-    </div>
-</div>
-
-<script src="crypto.js"></script>
-<script src="hibp.js"></script>
-<script src="storage.js"></script>
-<script src="popup.js"></script>
+    <table class="popup-table">
+        <tr>
+            <td>Password expiry system</td>
+            <td id="btn-toggle-system" class="clickable">ON</td>
+        </tr>
+        <tr>
+            <td>Current website:</td>
+            <td id="current-website">-</td>
+        </tr>
+        <tr>
+            <td id="btn-password-check" class="clickable">Password check:</td>
+            <td>
+                <input type="password" id="password-check-input" placeholder="Enter password" autocomplete="off">
+            </td>
+        </tr>
+        <tr>
+            <td id="btn-track-website" class="clickable">Track website</td>
+            <td id="track-status"></td>
+        </tr>
+        <tr>
+            <td id="status-verified">Verified</td>
+            <td id="status-not-verified">Not Verified</td>
+        </tr>
+        <tr>
+            <td id="btn-settings" class="clickable">Settings</td>
+            <td></td>
+        </tr>
+    </table>
+    <script src="crypto.js"></script>
+    <script src="hibp.js"></script>
+    <script src="storage.js"></script>
+    <script src="popup.js"></script>
 </body>
 </html>

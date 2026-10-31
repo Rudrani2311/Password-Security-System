@@ -140,7 +140,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                     const result = await PSSStorage.validatePassword(
                         request.domain,
                         request.password,
-                        request.username || ""
+                        Boolean(request.strictReuse)
                     );
                     sendResponse(result);
                     break;
