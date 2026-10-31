@@ -387,6 +387,10 @@ function startMockTargetWebsite(port) {
         console.log("  🎉 ALL REAL CHROME EXTENSION E2E TESTS & SCREENSHOTS PASSED!");
         console.log("══════════════════════════════════════════════════════════════\n");
     } finally {
+        // Clean up all test domains from MongoDB Atlas so the user's real vault stays clean
+        for (const d of ["127.0.0.1", "coursera.org", "tryhackme.com", "linkedin.com"]) {
+            try { await fetch(`${BACKEND_URL}/api/sites/${d}`, { method: "DELETE" }); } catch {}
+        }
         await browser.close();
         siteServer.close();
     }

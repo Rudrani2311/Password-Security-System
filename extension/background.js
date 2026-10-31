@@ -6,6 +6,8 @@ const ALARM_AUDIT = "pss_periodic_audit";
 
 chrome.runtime.onInstalled.addListener(async () => {
     console.log("[PSS] Password Security System installed.");
+    // Purge any legacy seeded demo keys from older versions
+    chrome.storage.local.remove(["passrotate_vault", "passrotate_settings"]);
     chrome.alarms.create(ALARM_AUDIT, { periodInMinutes: 360 });
     await auditVault();
 });
