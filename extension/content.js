@@ -3,15 +3,24 @@
     window.__pss_injected = true;
 
     const domain = String(window.location.hostname || "").toLowerCase().replace(/^www\./, "").trim();
+    let systemEnabled = true;
     let currentSite = null;
     let currentStatus = null;
     let inputTimer = null;
+    let reminderTimer = null;
+    let currentInvalidReason = null;
+    let validationSeq = 0;
 
     init();
 
     function init() {
         chrome.runtime.sendMessage({ action: "GET_SITE_STATUS", domain }, response => {
             if (chrome.runtime.lastError || !response) return;
+            systemEnabled = response.enabled !== false;
+            if (!systemEnabled) {
+                removeAllPopups();
+                return;
+            }
             if (response.managed) {
                 currentSite = response.site;
                 currentStatus = response.status;
@@ -21,23 +30,59 @@
             }
         });
 
+        chrome.runtime.onMessage.addListener(msg => {
+            if (msg && msg.action === "SYSTEM_TOGGLED") {
+                systemEnabled = Boolean(msg.enabled);
+                if (!systemEnabled) {
+                    removeAllPopups();
+                } else {
+                    const activePw = getActivePasswordInput();
+                    if (activePw && activePw.value) evaluateTypedPassword(activePw);
+                }
+            }
+        });
+
+        if (chrome.storage && chrome.storage.onChanged) {
+            chrome.storage.onChanged.addListener((changes, area) => {
+                if (area === "local" && changes.pss_settings && changes.pss_settings.newValue) {
+                    systemEnabled = changes.pss_settings.newValue.enabled !== false;
+                    if (!systemEnabled) {
+                        removeAllPopups();
+                    }
+                }
+            });
+        }
+
         bindInputsAndForms();
+        bindGlobalInterceptors();
         const obs = new MutationObserver(() => bindInputsAndForms());
         obs.observe(document.documentElement, { childList: true, subtree: true });
     }
 
-    // Black & white notification popup for near-expiry warning
+    function removeAllPopups() {
+        clearTimeout(inputTimer);
+        clearTimeout(reminderTimer);
+        currentInvalidReason = null;
+        ["pss-not-allowed-backdrop", "pss-expiry-popup", "pss-redirect-popup"].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.remove();
+        });
+    }
+
+    // Black & white notification popup for near-expiry warning (Sentence case + Times New Roman)
     function showExpiryBanner(days) {
+        if (!systemEnabled) return;
         if (document.getElementById("pss-expiry-popup")) return;
         const box = document.createElement("div");
         box.id = "pss-expiry-popup";
         box.className = "pss-bw-popup pss-top-banner";
-        box.textContent = `password expires in ${days} days. Rotate password.`;
+        box.textContent = `Password expires in ${days} days. Rotate password.`;
         document.body.prepend(box);
     }
 
-    // Black & white notification popup for redirect
+    // Black & white notification popup for redirect (Sentence case + Times New Roman)
     function showRedirectingPopup(targetLabel) {
+        if (!systemEnabled) return;
         let box = document.getElementById("pss-redirect-popup");
         if (!box) {
             box = document.createElement("div");
@@ -45,21 +90,29 @@
             box.className = "pss-bw-popup pss-bottom-popup";
             document.body.appendChild(box);
         }
-        box.textContent = `redirecting to ${targetLabel}`;
+        box.textContent = `Redirecting to ${targetLabel.toLowerCase()}.`;
     }
 
-    // Simplified light-blue & dark-blue "Password Not Allowed" popup matching the extension popup
+    // Simplified light-blue & dark-blue "Password not allowed" popup
     function showPasswordNotAllowed(reason) {
-        const existing = document.getElementById("pss-not-allowed-backdrop");
-        if (existing) existing.remove();
+        if (!systemEnabled) return;
+        clearTimeout(reminderTimer);
+        currentInvalidReason = reason;
 
-        const wrapper = document.createElement("div");
+        let wrapper = document.getElementById("pss-not-allowed-backdrop");
+        if (wrapper) {
+            const reasonEl = document.getElementById("pss-modal-reason");
+            if (reasonEl) reasonEl.textContent = reason;
+            return;
+        }
+
+        wrapper = document.createElement("div");
         wrapper.id = "pss-not-allowed-backdrop";
 
         wrapper.innerHTML = `
             <div class="pss-not-allowed-card" id="pss-not-allowed-card">
                 <div class="pss-na-header">
-                    <div class="pss-na-title">Password Not Allowed</div>
+                    <div class="pss-na-title">Password not allowed</div>
                     <button type="button" id="pss-btn-close-x" class="pss-na-close" aria-label="Close">&#10005;</button>
                 </div>
                 <div class="pss-na-reason" id="pss-modal-reason">${escHtml(reason)}</div>
@@ -69,73 +122,240 @@
         document.body.appendChild(wrapper);
 
         document.getElementById("pss-btn-close-x").addEventListener("click", () => {
+            validationSeq++;
             clearTimeout(inputTimer);
+            clearTimeout(reminderTimer);
             wrapper.remove();
+            // Keep reminding the user as long as the password in the box still does not meet all requirements
+            scheduleReminderIfStillInvalid();
         });
+    }
+
+    function scheduleReminderIfStillInvalid() {
+        clearTimeout(reminderTimer);
+        reminderTimer = setTimeout(() => {
+            if (!systemEnabled) return;
+            const pwInput = getActivePasswordInput();
+            if (pwInput && pwInput.value && pwInput.dataset.pssValid === "0" && currentInvalidReason) {
+                showPasswordNotAllowed(currentInvalidReason);
+            }
+        }, 1200);
+    }
+
+    function checkLocalMissingRequirements(password) {
+        if (!password || password.length < 8) {
+            return { valid: false, reason: "Must be at least 8 characters." };
+        }
+        const missing = [];
+        if (!/[A-Z]/.test(password)) missing.push("uppercase");
+        if (!/[a-z]/.test(password)) missing.push("lowercase");
+        if (!/[0-9]/.test(password)) missing.push("numbers");
+        if (!/[^A-Za-z0-9]/.test(password)) missing.push("special characters");
+
+        if (missing.length > 0) {
+            const joined = missing.join(", ");
+            const sentence = joined.charAt(0).toUpperCase() + joined.slice(1) + ".";
+            return { valid: false, reason: sentence };
+        }
+        return { valid: true, reason: null };
+    }
+
+    function evaluateTypedPassword(input) {
+        if (!systemEnabled) return;
+        const val = input.value;
+        if (!val) {
+            input.dataset.pssValid = "0";
+            currentInvalidReason = null;
+            clearTimeout(reminderTimer);
+            const openModal = document.getElementById("pss-not-allowed-backdrop");
+            if (openModal) openModal.remove();
+            return;
+        }
+
+        // Immediate local check for progressive missing requirement feedback
+        const localCheck = checkLocalMissingRequirements(val);
+        if (!localCheck.valid) {
+            input.dataset.pssValid = "0";
+            currentInvalidReason = localCheck.reason;
+            if (document.getElementById("pss-not-allowed-backdrop")) {
+                showPasswordNotAllowed(localCheck.reason);
+            }
+        }
+
+        clearTimeout(inputTimer);
+        inputTimer = setTimeout(() => {
+            if (!systemEnabled) return;
+            const latestVal = input.value;
+            if (!latestVal) return;
+
+            const latestLocal = checkLocalMissingRequirements(latestVal);
+            if (!latestLocal.valid) {
+                input.dataset.pssValid = "0";
+                currentInvalidReason = latestLocal.reason;
+                showPasswordNotAllowed(latestLocal.reason);
+            }
+
+            const mySeq = ++validationSeq;
+            chrome.runtime.sendMessage(
+                { action: "VALIDATE_PASSWORD", domain, password: latestVal },
+                res => {
+                    if (chrome.runtime.lastError || !res || !systemEnabled) return;
+                    if (mySeq !== validationSeq || input.value !== latestVal) return;
+                    if (!res.valid) {
+                        input.dataset.pssValid = "0";
+                        currentInvalidReason = res.reason;
+                        showPasswordNotAllowed(res.reason);
+                    } else {
+                        input.dataset.pssValid = "1";
+                        currentInvalidReason = null;
+                        clearTimeout(reminderTimer);
+                        const openModal = document.getElementById("pss-not-allowed-backdrop");
+                        if (openModal) openModal.remove();
+                    }
+                }
+            );
+        }, 250);
+    }
+
+    function getActivePasswordInput(root = document) {
+        const pwInputs = Array.from(root.querySelectorAll('input[type="password"]'));
+        return [...pwInputs].reverse().find(i => i.value) || pwInputs[0] || null;
     }
 
     function bindInputsAndForms() {
         document.querySelectorAll('input[type="password"]').forEach(input => {
             if (input.dataset.pssInputBound === "1") return;
             input.dataset.pssInputBound = "1";
+            input.dataset.pssValid = "0";
 
             input.addEventListener("input", () => {
-                clearTimeout(inputTimer);
-                const val = input.value;
-                if (!val) return;
-                inputTimer = setTimeout(() => {
-                    chrome.runtime.sendMessage(
-                        { action: "VALIDATE_PASSWORD", domain, password: val },
-                        res => {
-                            if (chrome.runtime.lastError || !res) return;
-                            if (!res.valid) {
-                                showPasswordNotAllowed(res.reason);
-                            } else {
-                                const openModal = document.getElementById("pss-not-allowed-backdrop");
-                                if (openModal) openModal.remove();
-                            }
-                        }
-                    );
-                }, 600);
+                delete input.dataset.pssVerifiedAllow;
+                evaluateTypedPassword(input);
             });
         });
+    }
 
-        document.querySelectorAll("form").forEach(form => {
-            if (form.dataset.pssFormBound === "1") return;
-            if (!form.querySelector('input[type="password"]')) return;
-            form.dataset.pssFormBound = "1";
+    function isSubmitOrAuthTrigger(el) {
+        if (!el || !el.closest) return null;
+        if (el.closest("#pss-not-allowed-backdrop")) return null;
+        const btn = el.closest('button, input[type="submit"], input[type="button"], [role="button"]');
+        if (!btn) return null;
+        if (btn.type === "submit") return btn;
+        const form = btn.closest("form");
+        if (form && form.querySelector('input[type="password"]')) return btn;
+        const text = ((btn.innerText || btn.value || btn.getAttribute("aria-label") || "")).toLowerCase().trim();
+        const authWords = ["log in", "login", "sign in", "signin", "sign up", "signup", "register", "continue", "submit", "next", "verify"];
+        if (authWords.some(w => text.includes(w)) && getActivePasswordInput()) {
+            return btn;
+        }
+        return null;
+    }
 
-            form.addEventListener("submit", e => {
-                if (form.dataset.pssVerifiedAllow === "1") {
-                    delete form.dataset.pssVerifiedAllow;
-                    return;
+    function bindGlobalInterceptors() {
+        // 1. Intercept clicks on any Login / Sign up / Submit button in capture phase
+        window.addEventListener("click", e => {
+            if (!systemEnabled) return;
+            const trigger = isSubmitOrAuthTrigger(e.target);
+            if (!trigger) return;
+
+            const scope = trigger.closest("form") || document;
+            const activePw = getActivePasswordInput(scope) || getActivePasswordInput(document);
+            if (!activePw || !activePw.value) return;
+
+            if (activePw.dataset.pssVerifiedAllow === "1") {
+                delete activePw.dataset.pssVerifiedAllow;
+                return;
+            }
+
+            clearTimeout(inputTimer);
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+
+            const userField = scope.querySelector('input[type="email"], input[name*="user" i], input[name*="email" i], input[type="text"]');
+            const username = userField ? userField.value.trim() : "";
+
+            handleLoginAttempt(activePw, activePw.value, username, () => {
+                activePw.dataset.pssVerifiedAllow = "1";
+                const form = trigger.closest("form");
+                if (form) {
+                    form.dataset.pssVerifiedAllow = "1";
                 }
+                trigger.click();
+            });
+        }, true);
 
-                const pwInputs = Array.from(form.querySelectorAll('input[type="password"]'));
-                const activePw = [...pwInputs].reverse().find(i => i.value) || pwInputs[0];
-                const password = activePw ? activePw.value : "";
-                if (!password) return;
+        // 2. Intercept Enter key in password/form inputs in capture phase
+        window.addEventListener("keydown", e => {
+            if (!systemEnabled || e.key !== "Enter") return;
+            const target = e.target;
+            if (!target || (target.tagName !== "INPUT" && target.tagName !== "BUTTON")) return;
 
-                const userField = form.querySelector('input[type="email"], input[name*="user" i], input[name*="email" i], input[type="text"]');
-                const username = userField ? userField.value.trim() : "";
+            const scope = (target.closest && target.closest("form")) || document;
+            const activePw = getActivePasswordInput(scope) || getActivePasswordInput(document);
+            if (!activePw || !activePw.value) return;
 
-                clearTimeout(inputTimer);
-                e.preventDefault();
-                e.stopImmediatePropagation();
+            if (activePw.dataset.pssVerifiedAllow === "1") {
+                return;
+            }
 
-                handleLoginAttempt(password, username, () => {
+            clearTimeout(inputTimer);
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+
+            const userField = scope.querySelector('input[type="email"], input[name*="user" i], input[name*="email" i], input[type="text"]');
+            const username = userField ? userField.value.trim() : "";
+
+            handleLoginAttempt(activePw, activePw.value, username, () => {
+                activePw.dataset.pssVerifiedAllow = "1";
+                const form = activePw.closest("form");
+                if (form) {
                     form.dataset.pssVerifiedAllow = "1";
                     const submitBtn = form.querySelector('button[type="submit"], input[type="submit"]');
                     if (typeof form.requestSubmit === "function") {
                         try { form.requestSubmit(submitBtn || undefined); return; } catch {}
                     }
                     form.submit();
-                });
-            }, true);
-        });
+                }
+            });
+        }, true);
+
+        // 3. Intercept native form submit in capture phase
+        window.addEventListener("submit", e => {
+            if (!systemEnabled) return;
+            const form = e.target;
+            if (!form || !form.querySelector) return;
+            const activePw = getActivePasswordInput(form);
+            if (!activePw || !activePw.value) return;
+
+            if (form.dataset.pssVerifiedAllow === "1" || activePw.dataset.pssVerifiedAllow === "1") {
+                delete form.dataset.pssVerifiedAllow;
+                delete activePw.dataset.pssVerifiedAllow;
+                return;
+            }
+
+            clearTimeout(inputTimer);
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+
+            const userField = form.querySelector('input[type="email"], input[name*="user" i], input[name*="email" i], input[type="text"]');
+            const username = userField ? userField.value.trim() : "";
+
+            handleLoginAttempt(activePw, activePw.value, username, () => {
+                form.dataset.pssVerifiedAllow = "1";
+                activePw.dataset.pssVerifiedAllow = "1";
+                const submitBtn = form.querySelector('button[type="submit"], input[type="submit"]');
+                if (typeof form.requestSubmit === "function") {
+                    try { form.requestSubmit(submitBtn || undefined); return; } catch {}
+                }
+                form.submit();
+            });
+        }, true);
     }
 
-    function handleLoginAttempt(password, username, onAllow) {
+    function handleLoginAttempt(pwInput, password, username, onAllow) {
         chrome.runtime.sendMessage(
             { action: "ATTEMPT_LOGIN", domain, username, password },
             response => {
@@ -145,14 +365,20 @@
                 }
 
                 if (!response.allowed) {
-                    showPasswordNotAllowed(response.reason || "Password does not meet requirements.");
+                    const reason = response.reason || "Password does not meet requirements.";
+                    if (pwInput) pwInput.dataset.pssValid = "0";
+                    currentInvalidReason = reason;
+                    showPasswordNotAllowed(reason);
                     if (response.code === "EXPIRED") {
-                        showRedirectingPopup("Forgot Password");
+                        showRedirectingPopup("forgot password");
                         setTimeout(() => redirectToForgotPassword(), 1200);
                     }
                     return;
                 }
 
+                if (pwInput) pwInput.dataset.pssValid = "1";
+                currentInvalidReason = null;
+                clearTimeout(reminderTimer);
                 onAllow();
             }
         );

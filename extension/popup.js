@@ -1,6 +1,7 @@
 let currentDomain = "";
 
 document.addEventListener("DOMContentLoaded", async () => {
+    const containerEl = document.querySelector(".popup-container");
     const toggleEl = document.getElementById("btn-toggle-system");
     const websiteEl = document.getElementById("current-website");
     const checkBtn = document.getElementById("btn-password-check");
@@ -10,19 +11,29 @@ document.addEventListener("DOMContentLoaded", async () => {
     const trackStatus = document.getElementById("track-status");
     const settingsBtn = document.getElementById("btn-settings");
 
-    const settings = await PSSStorage.getSettings();
+    let settings = await PSSStorage.getSettings();
     let enabled = settings.enabled !== false;
     updateToggleUI(enabled);
 
     toggleEl.addEventListener("click", async () => {
         enabled = !enabled;
+        settings = await PSSStorage.saveSettings({ ...settings, enabled });
         updateToggleUI(enabled);
-        await PSSStorage.saveSettings({ ...settings, enabled });
+        chrome.runtime.sendMessage({ action: "SET_SYSTEM_ENABLED", enabled });
     });
 
     function updateToggleUI(isOn) {
-        toggleEl.textContent = isOn ? "ON" : "OFF";
+        toggleEl.textContent = isOn ? "On" : "Off";
         toggleEl.classList.toggle("off", !isOn);
+        containerEl.classList.toggle("popup-disabled", !isOn);
+        checkInput.disabled = !isOn;
+        trackBtn.disabled = !isOn;
+        if (!isOn) {
+            feedbackEl.textContent = "";
+            trackStatus.textContent = "Password expiry system is turned off.";
+        } else {
+            trackStatus.textContent = "";
+        }
     }
 
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -31,12 +42,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         websiteEl.textContent = currentDomain;
         const site = await PSSStorage.getSite(currentDomain);
         if (site) {
-            trackBtn.textContent = "Website Tracked";
+            trackBtn.textContent = "Website tracked";
         }
     }
 
     let checkTimer = null;
     async function runPasswordCheck() {
+        if (!enabled) return;
         const pw = checkInput.value;
         if (!pw) {
             feedbackEl.textContent = "";
@@ -61,15 +73,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
     checkInput.addEventListener("input", () => {
         clearTimeout(checkTimer);
-        checkTimer = setTimeout(runPasswordCheck, 300);
+        checkTimer = setTimeout(runPasswordCheck, 250);
     });
 
     trackBtn.addEventListener("click", () => {
-        if (!currentDomain) return;
+        if (!enabled || !currentDomain) return;
         chrome.runtime.sendMessage(
             { action: "TRACK_SITE", domain: currentDomain },
             () => {
-                trackBtn.textContent = "Website Tracked";
+                trackBtn.textContent = "Website tracked";
                 trackStatus.textContent = `Tracking ${currentDomain} (30 days remaining)`;
             }
         );

@@ -5,8 +5,6 @@ importScripts("crypto.js", "hibp.js", "storage.js");
 const ALARM_AUDIT = "pss_periodic_audit";
 
 chrome.runtime.onInstalled.addListener(async () => {
-    console.log("[PSS] Password Security System installed.");
-    // Purge any legacy seeded demo keys from older versions
     chrome.storage.local.remove(["passrotate_vault", "passrotate_settings"]);
     chrome.alarms.create(ALARM_AUDIT, { periodInMinutes: 360 });
     await auditVault();
@@ -15,8 +13,6 @@ chrome.runtime.onInstalled.addListener(async () => {
 chrome.alarms.onAlarm.addListener(async alarm => {
     if (alarm.name === ALARM_AUDIT) await auditVault();
 });
-
-// ─── Tab Badge Updates ────────────────────────────────────────────────────────
 
 chrome.tabs.onActivated.addListener(async ({ tabId }) => {
     try {
@@ -30,6 +26,11 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 });
 
 async function updateBadge(url) {
+    const settings = await PSSStorage.getSettings();
+    if (settings.enabled === false) {
+        chrome.action.setBadgeText({ text: "" });
+        return;
+    }
     if (!url || !url.startsWith("http")) {
         chrome.action.setBadgeText({ text: "" });
         return;
@@ -53,23 +54,22 @@ async function updateBadge(url) {
     }
 }
 
-// ─── Vault Audit + Desktop Notifications ─────────────────────────────────────
-
 async function auditVault() {
-    const vault = await PSSStorage.getVault();
     const settings = await PSSStorage.getSettings();
+    if (settings.enabled === false) return;
+    const vault = await PSSStorage.getVault();
 
     for (const site of vault) {
         const status = PSSStorage.calculateStatus(site);
         if (status.isExpired) {
             sendNotification(
-                `Password Expired: ${site.siteName || site.domain}`,
+                `Password expired: ${site.siteName || site.domain}`,
                 `Your password for ${site.siteName || site.domain} has expired. Login is blocked until you rotate it.`,
                 settings
             );
         } else if (status.isNearExpiry) {
             sendNotification(
-                `Password Expiry Warning: ${site.siteName || site.domain}`,
+                `Password expiry warning: ${site.siteName || site.domain}`,
                 `Your password is going to expire in ${status.daysRemaining} day${status.daysRemaining === 1 ? "" : "s"}.`,
                 settings
             );
@@ -87,28 +87,48 @@ function sendNotification(title, message, settings) {
             message,
             priority: 2
         });
-    } catch (e) {
-        console.warn("[PSS] Notification error:", e);
-    }
+    } catch {}
 }
-
-// ─── Message Router ───────────────────────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     (async () => {
         try {
             switch (request.action) {
 
+                case "SET_SYSTEM_ENABLED": {
+                    const current = await PSSStorage.getSettings();
+                    const enabled = Boolean(request.enabled);
+                    await PSSStorage.saveSettings({ ...current, enabled });
+                    const tabs = await chrome.tabs.query({});
+                    for (const t of tabs) {
+                        if (t.id) {
+                            try {
+                                chrome.tabs.sendMessage(t.id, { action: "SYSTEM_TOGGLED", enabled });
+                            } catch {}
+                        }
+                    }
+                    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+                    if (activeTab && activeTab.url) await updateBadge(activeTab.url);
+                    else chrome.action.setBadgeText({ text: "" });
+                    sendResponse({ success: true, enabled });
+                    break;
+                }
+
                 case "GET_SITE_STATUS": {
+                    const settings = await PSSStorage.getSettings();
                     const domain = PSSCrypto.normalizeDomain(
                         request.domain || (sender.tab ? sender.tab.url : "")
                     );
+                    if (settings.enabled === false) {
+                        sendResponse({ managed: false, enabled: false, domain });
+                        break;
+                    }
                     const site = await PSSStorage.getSite(domain);
                     if (!site) {
-                        sendResponse({ managed: false, domain });
+                        sendResponse({ managed: false, enabled: true, domain });
                     } else {
                         const status = PSSStorage.calculateStatus(site);
-                        sendResponse({ managed: true, site, status });
+                        sendResponse({ managed: true, enabled: true, site, status });
                     }
                     break;
                 }
@@ -204,7 +224,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                     sendResponse({ error: "Unknown action" });
             }
         } catch (error) {
-            console.error("[PSS] Background error:", error);
             sendResponse({ error: error.message });
         }
     })();

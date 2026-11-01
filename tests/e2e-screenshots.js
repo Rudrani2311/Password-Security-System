@@ -34,15 +34,15 @@ function startTestPagesServer(port) {
             res.end(`<!DOCTYPE html>
 <html>
 <head><meta charset="UTF-8"><title>Reset Password</title>
-<style>body{font-family:sans-serif;background:#f8fafc;display:flex;justify-content:center;align-items:center;height:100vh;margin:0}.card{background:#fff;padding:32px;border:1px solid #cbd5e1;width:360px}</style>
+<style>body{font-family:"Times New Roman",serif;background:#f8fafc;display:flex;justify-content:center;align-items:center;height:100vh;margin:0}.card{background:#fff;padding:32px;border:1px solid #cbd5e1;width:360px}</style>
 </head>
 <body>
 <div class="card">
-    <h3>Forgot Password — Reset via Email OTP</h3>
-    <p>OTP Verified. Enter new password:</p>
+    <h3>Forgot password — Reset via email OTP</h3>
+    <p>OTP verified. Enter new password:</p>
     <form action="/login" method="GET">
         <input type="password" id="reset-pw" placeholder="New password" style="width:100%;padding:8px;margin-bottom:12px;box-sizing:border-box">
-        <button type="submit" style="width:100%;padding:10px;background:#0f172a;color:#fff;border:none">Update Password</button>
+        <button type="submit" style="width:100%;padding:10px;background:#0f172a;color:#fff;border:none">Update password</button>
     </form>
 </div>
 </body></html>`);
@@ -120,35 +120,35 @@ function startTestPagesServer(port) {
 
         if (req.url.startsWith("/logged-in")) {
             res.writeHead(200, { "Content-Type": "text/html" });
-            res.end(`<!DOCTYPE html><html><head><title>Logged In</title></head><body><h2 id="logged-in-ok">Login Successful</h2></body></html>`);
+            res.end(`<!DOCTYPE html><html><head><title>Logged In</title></head><body><h2 id="logged-in-ok">Login successful</h2></body></html>`);
             return;
         }
 
         res.writeHead(200, { "Content-Type": "text/html" });
         res.end(`<!DOCTYPE html>
 <html>
-<head><meta charset="UTF-8"><title>Coursera Login</title>
+<head><meta charset="UTF-8"><title>Sign in</title>
 <style>
-    body { font-family: sans-serif; background: #f1f5f9; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-    .login-box { background: #fff; padding: 32px; border: 1px solid #cbd5e1; width: 340px; }
-    h3 { margin: 0 0 16px; }
-    input { width: 100%; padding: 8px 10px; margin-bottom: 12px; box-sizing: border-box; border: 1px solid #94a3b8; }
-    .row { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px; }
-    button { width: 100%; padding: 10px; background: #1e293b; color: #fff; border: none; cursor: pointer; }
+    body { font-family: "Times New Roman", Times, serif; background: #f1f5f9; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+    .login-box { background: #fff; padding: 32px; border: 1px solid #cbd5e1; width: 340px; border-radius: 6px; }
+    h3 { margin: 0 0 16px; font-size: 20px; }
+    input { width: 100%; padding: 8px 10px; margin-bottom: 12px; box-sizing: border-box; border: 1px solid #94a3b8; font-family: "Times New Roman", Times, serif; font-size: 15px; }
+    .row { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 6px; }
+    button { width: 100%; padding: 10px; background: #1e293b; color: #fff; border: none; cursor: pointer; font-family: "Times New Roman", Times, serif; font-size: 15px; border-radius: 4px; }
 </style>
 </head>
 <body>
     <div class="login-box">
-        <h3>Coursera Sign In</h3>
+        <h3>Coursera sign in</h3>
         <form id="login-form" action="/logged-in" method="GET">
-            <div class="row"><span>Username</span></div>
-            <input type="email" id="username-input" value="rudrani@gmail.com" required>
+            <div class="row"><span>Email</span></div>
+            <input type="email" id="username-input" value="24bcs10304@cuchd.in" required>
             <div class="row">
                 <span>Password</span>
-                <a href="/forgot-password" id="forgot-link">Forgot Password</a>
+                <a href="/forgot-password" id="forgot-link">Forgot password</a>
             </div>
             <input type="password" id="password-input" placeholder="Enter password" required>
-            <button type="submit" id="login-btn">Log In</button>
+            <button type="submit" id="login-btn">Log in</button>
         </form>
     </div>
 </body></html>`);
@@ -158,7 +158,7 @@ function startTestPagesServer(port) {
 }
 
 (async () => {
-    console.log("\n=== Running Real Browser & Live Postman API Screenshot Suite ===\n");
+    console.log("\n=== Running Progressive Change & E2E Verification Screenshot Suite ===\n");
     const siteServer = await startTestPagesServer(TEST_SITE_PORT);
     const chromePath = getChromePath();
 
@@ -184,23 +184,56 @@ function startTestPagesServer(port) {
             { timeout: 10000 }
         );
         const extensionId = new URL(swTarget.url()).hostname;
-        const page = await browser.newPage();
 
-        // Get the extension's generated userId so backend calls match the extension instance
-        await page.goto(`chrome-extension://${extensionId}/popup.html`, { waitUntil: "networkidle0" });
-        testUserId = await page.evaluate(() => window.PSSStorage.getUserId());
+        // ── CHANGE 1 SCREENSHOTS: Main Popup On / Off Toggle (Times New Roman + Sentence case) ──
+        const popupPage = await browser.newPage();
+        await popupPage.setViewport({ width: 420, height: 340 });
+        await popupPage.goto(`chrome-extension://${extensionId}/popup.html`, { waitUntil: "networkidle0" });
+        testUserId = await popupPage.evaluate(() => window.PSSStorage.getUserId());
         const apiHeaders = { "Content-Type": "application/json", "X-PSS-User-Id": testUserId };
 
+        await popupPage.evaluate(() => {
+            document.getElementById("current-website").textContent = "coursera.org";
+        });
+        await popupPage.screenshot({ path: path.join(SCREENSHOT_DIR, "change1_popup_on.png") });
+        console.log("  ✅ Change Screenshot 1: Main popup with Times New Roman, sentence case, and 'On' state");
+
+        // Click 'On' -> turns 'Off' and disables extension
+        await popupPage.click("#btn-toggle-system");
+        await sleep(400);
+        const toggleTextOff = await popupPage.$eval("#btn-toggle-system", el => el.textContent);
+        assert.strictEqual(toggleTextOff, "Off", "Toggle button must switch to Off");
+        await popupPage.screenshot({ path: path.join(SCREENSHOT_DIR, "change2_popup_off.png") });
+        console.log("  ✅ Change Screenshot 2: Main popup switched to 'Off' (actually disables extension)");
+
+        // Verify that while Off, typing an invalid password on a login page does NOT show popup
+        const page = await browser.newPage();
+        await page.goto(`http://127.0.0.1:${TEST_SITE_PORT}/login`, { waitUntil: "networkidle0" });
+        await page.type("#password-input", "flower");
+        await sleep(600);
+        const modalWhenOff = await page.$("#pss-not-allowed-card");
+        assert.strictEqual(modalWhenOff, null, "Popup must NOT appear when extension is turned Off");
+
+        // Switch back to 'On' in popup
+        await popupPage.bringToFront();
+        await popupPage.click("#btn-toggle-system");
+        await sleep(500);
+        await popupPage.type("#password-check-input", `Rudrani$Valid#${crypto.randomBytes(3).toString("hex")}!9`);
+        await popupPage.click("#btn-password-check");
+        await sleep(1000);
+        await popupPage.screenshot({ path: path.join(SCREENSHOT_DIR, "pdf_test6_extension_popup.png") });
+        await page.bringToFront();
+
+        // ── CHANGE 2 SCREENSHOTS: Progressive Missing Requirements ("flower" -> "flowerrr" -> "Flowerrr" -> "Flowerrr1") ──
         await fetch(`${BACKEND_URL}/api/sites/127.0.0.1`, { method: "DELETE", headers: apiHeaders });
         await fetch(`${BACKEND_URL}/api/sites/coursera.org`, { method: "DELETE", headers: apiHeaders });
 
-        // Seed oldPass1 then oldPass2 (set to 25 days ago -> 5 days remaining)
         await fetch(`${BACKEND_URL}/api/record-rotation`, {
             method: "POST",
             headers: apiHeaders,
             body: JSON.stringify({
                 domain: "127.0.0.1",
-                username: "rudrani@gmail.com",
+                username: "24bcs10304@cuchd.in",
                 password: oldPass1,
                 rotatedAt: new Date(Date.now() - 60 * 86400000).toISOString()
             })
@@ -210,19 +243,96 @@ function startTestPagesServer(port) {
             headers: apiHeaders,
             body: JSON.stringify({
                 domain: "127.0.0.1",
-                username: "rudrani@gmail.com",
+                username: "24bcs10304@cuchd.in",
                 password: oldPass2,
                 rotatedAt: new Date(Date.now() - 25 * 86400000).toISOString()
             })
         });
 
-        // 1. Screenshot: 5-Day Near Expiry Popup ("password expires in 5 days. Rotate password.")
+        // 5-day expiry popup screenshot
         await page.goto(`http://127.0.0.1:${TEST_SITE_PORT}/login`, { waitUntil: "networkidle0" });
         await page.waitForSelector("#pss-expiry-popup", { timeout: 8000 });
         await page.screenshot({ path: path.join(SCREENSHOT_DIR, "pdf_test1_5day_popup.png") });
-        console.log("  ✅ Screenshot 1: 5-day expiry popup (black & white, Times New Roman)");
+        console.log("  ✅ Screenshot: 5-day near-expiry banner ('Password expires in 5 days. Rotate password.')");
 
-        // 2. Screenshot: Expired Password + "redirecting to Forgot Password"
+        // Step A: Type "flower" (< 8 characters) -> "Must be at least 8 characters."
+        await page.$eval("#password-input", el => el.value = "");
+        await page.type("#password-input", "flower");
+        await page.waitForSelector("#pss-not-allowed-card", { timeout: 8000 });
+        const reasonFlower = await page.$eval("#pss-modal-reason", el => el.innerText);
+        assert.strictEqual(reasonFlower, "Must be at least 8 characters.");
+        await page.screenshot({ path: path.join(SCREENSHOT_DIR, "change3_step_flower.png") });
+        await page.screenshot({ path: path.join(SCREENSHOT_DIR, "pdf_test4_not_allowed_weak.png") });
+        console.log("  ✅ Change Screenshot 3 ('flower'): 'Must be at least 8 characters.'");
+
+        // Step B: Type "rr" to make "flowerrr" (has lowercase + 8 chars) -> "Uppercase, numbers, special characters."
+        await page.type("#password-input", "rr");
+        await sleep(600);
+        const reasonFlowerrr = await page.$eval("#pss-modal-reason", el => el.innerText);
+        assert.strictEqual(reasonFlowerrr, "Uppercase, numbers, special characters.");
+        await page.screenshot({ path: path.join(SCREENSHOT_DIR, "change4_step_flowerrr.png") });
+        console.log("  ✅ Change Screenshot 4 ('flowerrr'): 'Uppercase, numbers, special characters.'");
+
+        // Step C: Replace with "Flowerrr" (added uppercase) -> "uppercase" deleted -> "Numbers, special characters."
+        await page.$eval("#password-input", el => { el.value = ""; el.dispatchEvent(new Event("input", { bubbles: true })); });
+        await page.type("#password-input", "Flowerrr");
+        await sleep(600);
+        const reasonCapFlowerrr = await page.$eval("#pss-modal-reason", el => el.innerText);
+        assert.strictEqual(reasonCapFlowerrr, "Numbers, special characters.");
+        await page.screenshot({ path: path.join(SCREENSHOT_DIR, "change5_step_Flowerrr.png") });
+        console.log("  ✅ Change Screenshot 5 ('Flowerrr'): 'Numbers, special characters.' (uppercase removed!)");
+
+        // Step D: Type "1" to make "Flowerrr1" (added number) -> "numbers" deleted -> "Special characters."
+        await page.type("#password-input", "1");
+        await sleep(600);
+        const reasonFlowerrr1 = await page.$eval("#pss-modal-reason", el => el.innerText);
+        assert.strictEqual(reasonFlowerrr1, "Special characters.");
+        await page.screenshot({ path: path.join(SCREENSHOT_DIR, "change6_step_Flowerrr1.png") });
+        console.log("  ✅ Change Screenshot 6 ('Flowerrr1'): 'Special characters.' (numbers removed!)");
+
+        // ── CHANGE 3 SCREENSHOT: Clicking X closes popup, but popup re-appears & BLOCKS login while still invalid ──
+        await page.click("#pss-btn-close-x");
+        await sleep(200);
+        assert.strictEqual(await page.$("#pss-not-allowed-card"), null, "Popup closes when X is clicked");
+
+        // Try clicking Log in while password is still "Flowerrr1" (missing special character)
+        await page.click("#login-btn");
+        await page.waitForSelector("#pss-not-allowed-card", { timeout: 5000 });
+        assert.ok(page.url().includes("/login"), "Login MUST be blocked when requirements are not met after closing X");
+        await page.screenshot({ path: path.join(SCREENSHOT_DIR, "change7_persistent_popup_blocks_login.png") });
+        console.log("  ✅ Change Screenshot 7: Clicking Log in after closing X is BLOCKED & popup re-appears!");
+
+        // Also test automatic reminder popup re-appearing after clicking X without even clicking Log in
+        await page.click("#pss-btn-close-x");
+        await sleep(2100);
+        const autoReappeared = await page.$("#pss-not-allowed-card");
+        assert.ok(autoReappeared !== null, "Popup automatically re-appears to remind user while password is still invalid");
+
+        // ── CHANGE 4 SCREENSHOT: Old password shows "Old password not allowed." ──
+        await page.$eval("#password-input", el => { el.value = ""; el.dispatchEvent(new Event("input", { bubbles: true })); });
+        await page.type("#password-input", oldPass1);
+        await page.click("#login-btn");
+        await sleep(500);
+        await page.waitForSelector("#pss-not-allowed-card", { timeout: 8000 });
+        const reuseReason = await page.$eval("#pss-modal-reason", el => el.innerText);
+        assert.strictEqual(reuseReason, "Old password not allowed.");
+        await page.screenshot({ path: path.join(SCREENSHOT_DIR, "change8_old_password_blocked.png") });
+        await page.screenshot({ path: path.join(SCREENSHOT_DIR, "pdf_test3_not_allowed_reused.png") });
+        console.log("  ✅ Change Screenshot 8: Old password shows 'Old password not allowed.' and blocks login");
+
+        // ── CHANGE 5 SCREENSHOT: Breached password shows "This password was leaked in a data breach." ──
+        await page.$eval("#password-input", el => { el.value = ""; el.dispatchEvent(new Event("input", { bubbles: true })); });
+        await page.type("#password-input", "P@ssw0rd123!");
+        await page.click("#login-btn");
+        await sleep(1200);
+        await page.waitForSelector("#pss-not-allowed-card", { timeout: 10000 });
+        const breachReason = await page.$eval("#pss-modal-reason", el => el.innerText);
+        assert.strictEqual(breachReason, "This password was leaked in a data breach.");
+        await page.screenshot({ path: path.join(SCREENSHOT_DIR, "change9_breached_password_blocked.png") });
+        await page.screenshot({ path: path.join(SCREENSHOT_DIR, "pdf_test5_not_allowed_breached.png") });
+        console.log("  ✅ Change Screenshot 9: Leaked password shows 'This password was leaked in a data breach.'");
+
+        // ── Expired Password + "Redirecting to forgot password." ──
         await fetch(`${BACKEND_URL}/api/update-date`, {
             method: "POST",
             headers: apiHeaders,
@@ -236,64 +346,16 @@ function startTestPagesServer(port) {
         await page.click("#login-btn");
         await page.waitForSelector("#pss-not-allowed-card", { timeout: 8000 });
         await page.screenshot({ path: path.join(SCREENSHOT_DIR, "pdf_test2_expired_redirect.png") });
-        console.log("  ✅ Screenshot 2: Expired password 'Password Not Allowed' + 'redirecting to Forgot Password'");
-
-        // Wait for redirect to /forgot-password
         await page.waitForFunction(() => window.location.pathname.includes("/forgot-password"), { timeout: 8000 });
+        console.log("  ✅ Screenshot: Expired password blocked & redirected to Forgot password");
 
-        // 3. Screenshot: "Password Not Allowed" — Old Password Reuse (Bcrypt checked in MongoDB)
-        await page.goto(`http://127.0.0.1:${TEST_SITE_PORT}/login`, { waitUntil: "networkidle0" });
-        await page.type("#password-input", oldPass1);
-        await page.click("#login-btn");
-        await page.waitForSelector("#pss-not-allowed-card", { timeout: 8000 });
-        const reuseReason = await page.$eval("#pss-modal-reason", el => el.innerText);
-        assert.ok(reuseReason.includes("Used before"), `Got: ${reuseReason}`);
-        await page.screenshot({ path: path.join(SCREENSHOT_DIR, "pdf_test3_not_allowed_reused.png") });
-        console.log("  ✅ Screenshot 3: 'Password Not Allowed | X' — Old password reused (MongoDB bcrypt)");
-
-        // Test clicking 'X' closes popup, and attempting login again keeps displaying popup
-        await page.click("#pss-btn-close-x");
-        await sleep(200);
-        const closed = await page.$("#pss-not-allowed-card");
-        assert.strictEqual(closed, null, "Clicking X must close the popup");
-
-        // 4. Screenshot: "Password Not Allowed" — Weak Password (< 8 chars / missing special symbols)
-        await page.$eval("#password-input", el => el.value = "");
-        await page.type("#password-input", "weak123");
-        await page.click("#login-btn");
-        await page.waitForSelector("#pss-not-allowed-card", { timeout: 8000 });
-        await page.screenshot({ path: path.join(SCREENSHOT_DIR, "pdf_test4_not_allowed_weak.png") });
-        console.log("  ✅ Screenshot 4: 'Password Not Allowed | X' — Fails 8 chars / special symbol requirements");
-
-        // 5. Screenshot: "Password Not Allowed" — Breached Password (HaveIBeenPwned)
-        await page.click("#pss-btn-close-x");
-        await page.$eval("#password-input", el => el.value = "");
-        await page.type("#password-input", "P@ssw0rd123!");
-        await page.click("#login-btn");
-        await page.waitForSelector("#pss-not-allowed-card", { timeout: 10000 });
-        await page.screenshot({ path: path.join(SCREENSHOT_DIR, "pdf_test5_not_allowed_breached.png") });
-        console.log("  ✅ Screenshot 5: 'Password Not Allowed | X' — Exposed in data breach (HIBP)");
-
-        // 6. Screenshot: Extension Popup (Diagram 1 exact table)
-        const popupPage = await browser.newPage();
-        await popupPage.setViewport({ width: 420, height: 320 });
-        await popupPage.goto(`chrome-extension://${extensionId}/popup.html`, { waitUntil: "networkidle0" });
-        await popupPage.evaluate(() => {
-            document.getElementById("current-website").textContent = "coursera.org";
-        });
-        await popupPage.type("#password-check-input", `Rudrani$Valid#${crypto.randomBytes(3).toString("hex")}!9`);
-        await popupPage.click("#btn-password-check");
-        await sleep(1500);
-        await popupPage.screenshot({ path: path.join(SCREENSHOT_DIR, "pdf_test6_extension_popup.png") });
-        console.log("  ✅ Screenshot 6: Extension Popup matching Diagram 1 (Times New Roman, black & white)");
-
-        // 7. Screenshot: Settings Page (Only tracked websites & remaining days)
+        // ── CHANGE 6 SCREENSHOT: Settings Page (Times New Roman + Sentence case) ──
         await fetch(`${BACKEND_URL}/api/record-rotation`, {
             method: "POST",
             headers: apiHeaders,
             body: JSON.stringify({
                 domain: "coursera.org",
-                username: "rudrani@gmail.com",
+                username: "24bcs10304@cuchd.in",
                 password: "Coursera#Valid99!",
                 rotatedAt: new Date(Date.now() - 5 * 86400000).toISOString()
             })
@@ -302,16 +364,16 @@ function startTestPagesServer(port) {
         await settingsPage.setViewport({ width: 640, height: 360 });
         await settingsPage.goto(`chrome-extension://${extensionId}/dashboard.html`, { waitUntil: "networkidle0" });
         await sleep(1000);
+        await settingsPage.screenshot({ path: path.join(SCREENSHOT_DIR, "change10_settings_page.png") });
         await settingsPage.screenshot({ path: path.join(SCREENSHOT_DIR, "pdf_test7_settings_page.png") });
-        console.log("  ✅ Screenshot 7: Settings Page showing only Tracked Websites & Remaining Days");
+        console.log("  ✅ Change Screenshot 10: Settings page in Times New Roman & sentence case");
 
-        // 8. Live Postman API Tests in Rudrani's Workspace
+        // ── Live Postman API Tests in Rudrani's Workspace ──
         const pmPage = await browser.newPage();
         await pmPage.setViewport({ width: 1100, height: 680 });
         await pmPage.goto(`http://127.0.0.1:${TEST_SITE_PORT}/postman-runner`, { waitUntil: "networkidle0" });
 
-        // Live Test A: POST /api/record-rotation (Bcrypt salt hash)
-        const reqBody1 = { domain: "coursera.org", username: "rudrani@gmail.com", password: "Rudrani$NewPass#2026!" };
+        const reqBody1 = { domain: "coursera.org", username: "24bcs10304@cuchd.in", password: "Rudrani$NewPass#2026!" };
         const res1 = await fetch(`${BACKEND_URL}/api/record-rotation`, {
             method: "POST",
             headers: apiHeaders,
@@ -330,9 +392,7 @@ function startTestPagesServer(port) {
             `;
         }, { reqBody: reqBody1, resData: data1 });
         await pmPage.screenshot({ path: path.join(SCREENSHOT_DIR, "pdf_test8_postman_record_bcrypt.png") });
-        console.log("  ✅ Screenshot 8: Live Postman API Test — POST /api/record-rotation (bcrypt salt hash)");
 
-        // Live Test B: POST /api/check-reuse (Bcrypt compare)
         const reqBody2 = { domain: "coursera.org", password: "Rudrani$NewPass#2026!" };
         const res2 = await fetch(`${BACKEND_URL}/api/check-reuse`, {
             method: "POST",
@@ -353,7 +413,6 @@ function startTestPagesServer(port) {
             `;
         }, { reqBody: reqBody2, resData: data2 });
         await pmPage.screenshot({ path: path.join(SCREENSHOT_DIR, "pdf_test9_postman_check_reuse.png") });
-        console.log("  ✅ Screenshot 9: Live Postman API Test — POST /api/check-reuse (bcrypt compare)");
 
     } finally {
         for (const d of ["127.0.0.1", "coursera.org"]) {

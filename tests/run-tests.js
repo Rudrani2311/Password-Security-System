@@ -1,7 +1,5 @@
 const assert = require("assert");
 const http = require("http");
-const https = require("https");
-const crypto = require("crypto");
 
 let passed = 0;
 let failed = 0;
@@ -30,8 +28,15 @@ async function testAsync(name, fn) {
 
 function checkStrength(password) {
     if (!password || password.length < 8) return { valid: false, reason: "Must be at least 8 characters." };
-    if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
-        return { valid: false, reason: "Must contain uppercase, lowercase, number, and special symbol." };
+    const missing = [];
+    if (!/[A-Z]/.test(password)) missing.push("uppercase");
+    if (!/[a-z]/.test(password)) missing.push("lowercase");
+    if (!/[0-9]/.test(password)) missing.push("numbers");
+    if (!/[^A-Za-z0-9]/.test(password)) missing.push("special characters");
+    if (missing.length > 0) {
+        const joined = missing.join(", ");
+        const sentence = joined.charAt(0).toUpperCase() + joined.slice(1) + ".";
+        return { valid: false, reason: sentence };
     }
     return { valid: true, reason: null };
 }
@@ -41,7 +46,7 @@ function httpPost(path, body) {
         const data = JSON.stringify(body);
         const req = http.request({
             hostname: "localhost", port: 5000, path, method: "POST",
-            headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(data) }
+            headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(data), "X-PSS-User-Id": "unit_test_runner" }
         }, res => {
             let raw = "";
             res.on("data", c => raw += c);
@@ -55,7 +60,10 @@ function httpPost(path, body) {
 
 function httpRequest(method, path) {
     return new Promise((resolve, reject) => {
-        const req = http.request({ hostname: "localhost", port: 5000, path, method }, res => {
+        const req = http.request({
+            hostname: "localhost", port: 5000, path, method,
+            headers: { "X-PSS-User-Id": "unit_test_runner" }
+        }, res => {
             let raw = "";
             res.on("data", c => raw += c);
             res.on("end", () => resolve({ status: res.statusCode, body: JSON.parse(raw || "{}") }));
@@ -68,9 +76,29 @@ function httpRequest(method, path) {
 (async () => {
     console.log("\n=== Password Security System Tests ===\n");
 
-    test("Rejects short password (< 8 chars)", () => assert.strictEqual(checkStrength("Ab1!").valid, false));
-    test("Rejects missing special symbol", () => assert.strictEqual(checkStrength("Abcdefg1").valid, false));
-    test("Accepts valid strong password", () => assert.strictEqual(checkStrength("SecureP@ss1").valid, true));
+    test("Rejects short password 'flower' (< 8 chars)", () => {
+        const res = checkStrength("flower");
+        assert.strictEqual(res.valid, false);
+        assert.strictEqual(res.reason, "Must be at least 8 characters.");
+    });
+    test("Shows only missing requirements for 'flowerrr' -> 'Uppercase, numbers, special characters.'", () => {
+        const res = checkStrength("flowerrr");
+        assert.strictEqual(res.valid, false);
+        assert.strictEqual(res.reason, "Uppercase, numbers, special characters.");
+    });
+    test("Deletes 'uppercase' when 'Flowerrr' is typed -> 'Numbers, special characters.'", () => {
+        const res = checkStrength("Flowerrr");
+        assert.strictEqual(res.valid, false);
+        assert.strictEqual(res.reason, "Numbers, special characters.");
+    });
+    test("Deletes 'numbers' when 'Flowerrr1' is typed -> 'Special characters.'", () => {
+        const res = checkStrength("Flowerrr1");
+        assert.strictEqual(res.valid, false);
+        assert.strictEqual(res.reason, "Special characters.");
+    });
+    test("Accepts valid strong password 'Flowerrr1!'", () => {
+        assert.strictEqual(checkStrength("Flowerrr1!").valid, true);
+    });
 
     await testAsync("GET /api/health returns ONLINE & MongoDB status", async () => {
         const r = await httpRequest("GET", "/api/health");

@@ -1,8 +1,10 @@
-/* Black & white popups for 5-day warning and redirecting notice */
+/* Black & white popups for 5-day warning and redirecting notice (Times New Roman) */
+#pss-expiry-popup,
+#pss-redirect-popup,
 .pss-bw-popup {
-    font-family: "Segoe UI", Tahoma, Arial, sans-serif !important;
-    font-size: 14px !important;
-    font-weight: 500 !important;
+    font-family: "Times New Roman", Times, serif !important;
+    font-size: 15px !important;
+    font-weight: normal !important;
     color: #ffffff !important;
     background-color: #000000 !important;
     border: 1px solid #ffffff !important;
@@ -27,7 +29,13 @@
     right: 20px !important;
 }
 
-/* Light-blue & dark-blue "Password Not Allowed" popup matching the initial extension popup */
+/* Light-blue & dark-blue "Password not allowed" popup (Times New Roman) */
+#pss-not-allowed-backdrop,
+#pss-not-allowed-backdrop * {
+    font-family: "Times New Roman", Times, serif !important;
+    box-sizing: border-box !important;
+}
+
 #pss-not-allowed-backdrop {
     position: fixed !important;
     top: 0 !important;
@@ -35,44 +43,47 @@
     right: 0 !important;
     bottom: 0 !important;
     z-index: 2147483647 !important;
-    background: rgba(13, 42, 84, 0.32) !important;
+    background: rgba(13, 42, 84, 0.25) !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
+    pointer-events: none !important;
 }
 
-.pss-not-allowed-card {
-    font-family: "Segoe UI", Tahoma, Arial, sans-serif !important;
+#pss-not-allowed-backdrop .pss-not-allowed-card {
+    pointer-events: auto !important;
+    font-family: "Times New Roman", Times, serif !important;
     width: 350px !important;
     background-color: #e3effc !important;
     border: 1.5px solid #9abbe0 !important;
     border-radius: 8px !important;
     padding: 16px !important;
-    box-sizing: border-box !important;
     box-shadow: 0 8px 24px rgba(13, 42, 84, 0.22) !important;
     display: flex !important;
     flex-direction: column !important;
     gap: 12px !important;
 }
 
-.pss-na-header {
+#pss-not-allowed-backdrop .pss-na-header {
     display: flex !important;
     justify-content: space-between !important;
     align-items: center !important;
     gap: 10px !important;
 }
 
-.pss-na-title {
+#pss-not-allowed-backdrop .pss-na-title {
+    font-family: "Times New Roman", Times, serif !important;
     background-color: #f3f8fe !important;
     border: 1px solid #bcd4ee !important;
     border-radius: 5px !important;
     padding: 7px 12px !important;
-    font-size: 14px !important;
-    font-weight: 600 !important;
+    font-size: 16px !important;
+    font-weight: bold !important;
     color: #0d2a54 !important;
 }
 
-.pss-na-close {
+#pss-not-allowed-backdrop .pss-na-close {
+    font-family: "Times New Roman", Times, serif !important;
     width: 30px !important;
     height: 30px !important;
     background-color: #143a6e !important;
@@ -80,7 +91,7 @@
     border: 1px solid #143a6e !important;
     border-radius: 5px !important;
     font-size: 14px !important;
-    font-weight: 600 !important;
+    font-weight: bold !important;
     cursor: pointer !important;
     display: flex !important;
     align-items: center !important;
@@ -89,17 +100,18 @@
     line-height: 1 !important;
 }
 
-.pss-na-close:hover {
+#pss-not-allowed-backdrop .pss-na-close:hover {
     background-color: #0f2d57 !important;
 }
 
-.pss-na-reason {
+#pss-not-allowed-backdrop .pss-na-reason {
+    font-family: "Times New Roman", Times, serif !important;
     background-color: #f3f8fe !important;
     border: 1px solid #bcd4ee !important;
     border-radius: 5px !important;
     padding: 10px 12px !important;
-    font-size: 13px !important;
-    font-weight: 500 !important;
+    font-size: 15px !important;
+    font-weight: normal !important;
     color: #0d2a54 !important;
     line-height: 1.4 !important;
 }

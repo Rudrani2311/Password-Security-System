@@ -72,7 +72,6 @@ const PSSStorage = {
         return new Promise(resolve => {
             chrome.storage.local.get(["pss_vault"], async result => {
                 let localVault = Array.isArray(result.pss_vault) ? result.pss_vault : [];
-                // Filter out legacy automated test domains
                 localVault = localVault.filter(item => {
                     const d = PSSCrypto.normalizeDomain(item.domain);
                     return d && !d.endsWith(".example.com");
@@ -169,17 +168,31 @@ const PSSStorage = {
         return true;
     },
 
+    // Dynamically checks only what is missing in sentence case
     checkStrength(password) {
         if (!password || password.length < 8) {
             return { valid: false, reason: "Must be at least 8 characters." };
         }
-        if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
-            return { valid: false, reason: "Must contain uppercase, lowercase, number, and special symbol." };
+        const missing = [];
+        if (!/[A-Z]/.test(password)) missing.push("uppercase");
+        if (!/[a-z]/.test(password)) missing.push("lowercase");
+        if (!/[0-9]/.test(password)) missing.push("numbers");
+        if (!/[^A-Za-z0-9]/.test(password)) missing.push("special characters");
+
+        if (missing.length > 0) {
+            const joined = missing.join(", ");
+            const sentence = joined.charAt(0).toUpperCase() + joined.slice(1) + ".";
+            return { valid: false, reason: sentence };
         }
         return { valid: true, reason: null };
     },
 
     async validatePassword(domain, plainPassword, strictReuse = false) {
+        const settings = await this.getSettings();
+        if (settings.enabled === false) {
+            return { valid: true, code: "DISABLED", reason: null };
+        }
+
         const cleanDomain = PSSCrypto.normalizeDomain(domain);
         const shaHash = await PSSCrypto.sha256(plainPassword);
         const site = await this.getSite(cleanDomain);
@@ -204,12 +217,12 @@ const PSSStorage = {
             }
 
             if (Array.isArray(site.passwordHashHistory) && site.passwordHashHistory.includes(shaHash)) {
-                return { valid: false, code: "REUSED", reason: "Used before (old password)." };
+                return { valid: false, code: "REUSED", reason: "Old password not allowed." };
             }
         }
 
         if (remoteReuse && remoteReuse.reused) {
-            return { valid: false, code: "REUSED", reason: "Used before (old password)." };
+            return { valid: false, code: "REUSED", reason: "Old password not allowed." };
         }
 
         const strength = this.checkStrength(plainPassword);
@@ -219,7 +232,7 @@ const PSSStorage = {
 
         const breach = await PSHIBP.checkBreach(plainPassword);
         if (breach.breached) {
-            return { valid: false, code: "BREACHED", reason: "Exposed in data breach." };
+            return { valid: false, code: "BREACHED", reason: "This password was leaked in a data breach." };
         }
 
         return { valid: true, code: "OK", reason: null };

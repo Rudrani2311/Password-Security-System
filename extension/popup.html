@@ -2,22 +2,22 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Password Security System</title>
+    <title>Password security system</title>
     <link rel="stylesheet" href="popup.css">
 </head>
 <body>
     <div class="popup-container">
         <div class="header-row">
             <span class="title-text">Password expiry system</span>
-            <button type="button" id="btn-toggle-system" class="toggle-btn">ON</button>
+            <button type="button" id="btn-toggle-system" class="toggle-btn">On</button>
         </div>
 
-        <div class="info-card">
+        <div class="info-card" id="website-card">
             <span class="field-label">Current website:</span>
             <span id="current-website" class="website-value">-</span>
         </div>
 
-        <div class="info-card check-card">
+        <div class="info-card check-card" id="check-card">
             <label for="password-check-input" id="btn-password-check" class="field-label clickable">Password check:</label>
             <input type="password" id="password-check-input" placeholder="Enter password" autocomplete="off">
             <div id="password-check-feedback" class="check-feedback"></div>
