@@ -8,11 +8,34 @@
     let redirectTimer = null;
     let validationSeq = 0;
 
+    function isContextValid() {
+        try {
+            return Boolean(typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id);
+        } catch {
+            return false;
+        }
+    }
+
+    function safeSendMessage(payload, callback) {
+        if (!isContextValid()) return;
+        try {
+            chrome.runtime.sendMessage(payload, res => {
+                try {
+                    if (!isContextValid() || chrome.runtime.lastError) return;
+                } catch {
+                    return;
+                }
+                if (typeof callback === "function") callback(res);
+            });
+        } catch {}
+    }
+
     init();
 
     function init() {
-        chrome.runtime.sendMessage({ action: "GET_SITE_STATUS", domain }, response => {
-            if (chrome.runtime.lastError || !response) return;
+        if (!isContextValid()) return;
+        safeSendMessage({ action: "GET_SITE_STATUS", domain }, response => {
+            if (!response) return;
             systemEnabled = response.enabled !== false;
             if (!systemEnabled) {
                 removeAllPopups();
@@ -23,38 +46,49 @@
             }
         });
 
-        chrome.runtime.onMessage.addListener(msg => {
-            if (msg && msg.action === "SYSTEM_TOGGLED") {
-                systemEnabled = Boolean(msg.enabled);
-                if (!systemEnabled) {
-                    removeAllPopups();
-                } else {
-                    const activePw = getActivePasswordInput();
-                    if (activePw && activePw.value) evaluateTypedPassword(activePw);
-                }
-            }
-        });
-
-        if (chrome.storage && chrome.storage.onChanged) {
-            chrome.storage.onChanged.addListener((changes, area) => {
-                if (area === "local" && changes.pss_settings && changes.pss_settings.newValue) {
-                    systemEnabled = changes.pss_settings.newValue.enabled !== false;
+        try {
+            chrome.runtime.onMessage.addListener(msg => {
+                if (!isContextValid()) return;
+                if (msg && msg.action === "SYSTEM_TOGGLED") {
+                    systemEnabled = Boolean(msg.enabled);
                     if (!systemEnabled) {
                         removeAllPopups();
+                    } else {
+                        const activePw = getActivePasswordInput();
+                        if (activePw && activePw.value) evaluateTypedPassword(activePw);
                     }
                 }
             });
-        }
+
+            if (chrome.storage && chrome.storage.onChanged) {
+                chrome.storage.onChanged.addListener((changes, area) => {
+                    if (!isContextValid()) return;
+                    if (area === "local" && changes.pss_settings && changes.pss_settings.newValue) {
+                        systemEnabled = changes.pss_settings.newValue.enabled !== false;
+                        if (!systemEnabled) {
+                            removeAllPopups();
+                        }
+                    }
+                });
+            }
+        } catch {}
 
         bindInputsAndForms();
         bindGlobalInterceptors();
         bindDemoPageBridge();
-        const obs = new MutationObserver(() => bindInputsAndForms());
+        const obs = new MutationObserver(() => {
+            if (!isContextValid()) {
+                obs.disconnect();
+                return;
+            }
+            bindInputsAndForms();
+        });
         obs.observe(document.documentElement, { childList: true, subtree: true });
     }
 
     function bindDemoPageBridge() {
         window.addEventListener("message", e => {
+            if (!isContextValid()) return;
             if (e.source !== window || !e.data || e.data.source !== "PSS_DEMO_PAGE") return;
             if (e.data.action === "DEMO_SET_STATE") {
                 validationSeq++;
@@ -65,7 +99,7 @@
                 const activePw = getActivePasswordInput();
                 const pwToTrack = e.data.password || (activePw && activePw.value) || "Rudrani#2026$Valid!";
 
-                chrome.runtime.sendMessage(
+                safeSendMessage(
                     {
                         action: "DEMO_SET_STATE",
                         domain,
@@ -85,7 +119,7 @@
                     }
                 );
             } else if (e.data.action === "DEMO_GET_STATUS") {
-                chrome.runtime.sendMessage({ action: "GET_SITE_STATUS", domain }, res => {
+                safeSendMessage({ action: "GET_SITE_STATUS", domain }, res => {
                     window.postMessage({ source: "PSS_EXTENSION_ACK", action: "DEMO_GET_STATUS", result: res }, "*");
                 });
             }
@@ -226,10 +260,10 @@
 
             const mySeq = ++validationSeq;
             const strictReuse = isResetOrSignupContext(input);
-            chrome.runtime.sendMessage(
+            safeSendMessage(
                 { action: "VALIDATE_PASSWORD", domain, password: latestVal, strictReuse },
                 res => {
-                    if (chrome.runtime.lastError || !res || !systemEnabled) return;
+                    if (!res || !systemEnabled) return;
                     if (mySeq !== validationSeq || input.value !== latestVal) return;
                     if (!res.valid) {
                         input.dataset.pssValid = "0";
@@ -383,11 +417,15 @@
     }
 
     function handleLoginAttempt(pwInput, password, username, onAllow) {
+        if (!isContextValid()) {
+            onAllow();
+            return;
+        }
         const strictReuse = isResetOrSignupContext(pwInput);
-        chrome.runtime.sendMessage(
+        safeSendMessage(
             { action: "ATTEMPT_LOGIN", domain, username, password, strictReuse },
             response => {
-                if (chrome.runtime.lastError || !response) {
+                if (!response) {
                     onAllow();
                     return;
                 }
