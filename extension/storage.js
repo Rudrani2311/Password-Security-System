@@ -1,7 +1,8 @@
 const PSSStorage = {
     DEFAULT_EXPIRY_DAYS: 30,
     DEFAULT_WARNING_DAYS: 5,
-    CLOUD_SERVER_URL: "https://password-security-system.onrender.com",
+    CLOUD_SERVER_URL: "https://password-security-system-zoni.onrender.com",
+    BACKUP_CLOUD_URL: "https://password-security-system-1.onrender.com",
     LOCAL_SERVER_URL: "http://localhost:5000",
 
     async getUserId() {
@@ -23,9 +24,12 @@ const PSSStorage = {
     async getApiEndpoints() {
         const settings = await this.getSettings();
         const urls = [];
-        if (settings.serverUrl) urls.push(settings.serverUrl.replace(/\/+$/, ""));
+        if (settings.serverUrl && !settings.serverUrl.includes("password-security-system.onrender.com")) {
+            urls.push(settings.serverUrl.replace(/\/+$/, ""));
+        }
         if (!urls.includes(this.LOCAL_SERVER_URL)) urls.push(this.LOCAL_SERVER_URL);
         if (!urls.includes(this.CLOUD_SERVER_URL)) urls.push(this.CLOUD_SERVER_URL);
+        if (!urls.includes(this.BACKUP_CLOUD_URL)) urls.push(this.BACKUP_CLOUD_URL);
         return urls;
     },
 
@@ -39,7 +43,8 @@ const PSSStorage = {
         for (const base of endpoints) {
             try {
                 const controller = new AbortController();
-                const timer = setTimeout(() => controller.abort(), 3500);
+                const timeoutMs = base.includes("localhost") ? 1800 : 5000;
+                const timer = setTimeout(() => controller.abort(), timeoutMs);
                 const res = await fetch(`${base}${path}`, { ...options, headers, signal: controller.signal });
                 clearTimeout(timer);
                 if (res.ok) return await res.json();

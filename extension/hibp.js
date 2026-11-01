@@ -38,11 +38,20 @@ const PSHIBP = {
                     text = await response.text();
                 }
             } catch {
-                // Fallback to local/cloud backend proxy if direct browser request is blocked
-                try {
-                    const proxyRes = await fetch(`http://localhost:5000/api/hibp/${prefix}`);
-                    if (proxyRes.ok) text = await proxyRes.text();
-                } catch {}
+                // Fallback to cloud or local backend proxy if direct browser request is blocked
+                const bases = [
+                    "https://password-security-system-zoni.onrender.com",
+                    "http://localhost:5000"
+                ];
+                for (const b of bases) {
+                    try {
+                        const proxyRes = await fetch(`${b}/api/hibp/${prefix}`);
+                        if (proxyRes.ok) {
+                            text = await proxyRes.text();
+                            if (text) break;
+                        }
+                    } catch {}
+                }
             }
 
             if (!text) {
