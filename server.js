@@ -42,6 +42,21 @@ const SALT_ROUNDS = 10;
 app.use(cors({ origin: "*" }));
 app.use(express.json());
 
+const demoSiteDir = path.join(__dirname, "demo-site");
+app.use(express.static(demoSiteDir));
+
+app.get("/forgot-password", (req, res) => {
+    res.sendFile(path.join(demoSiteDir, "forgot-password.html"));
+});
+
+app.get("/login", (req, res) => {
+    res.sendFile(path.join(demoSiteDir, "index.html"));
+});
+
+app.get("/portal", (req, res) => {
+    res.sendFile(path.join(demoSiteDir, "portal.html"));
+});
+
 const siteSchema = new mongoose.Schema({
     userId: { type: String, default: "default", index: true },
     domain: { type: String, required: true, index: true },

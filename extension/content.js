@@ -55,8 +55,39 @@
 
         bindInputsAndForms();
         bindGlobalInterceptors();
+        bindDemoPageBridge();
         const obs = new MutationObserver(() => bindInputsAndForms());
         obs.observe(document.documentElement, { childList: true, subtree: true });
+    }
+
+    function bindDemoPageBridge() {
+        window.addEventListener("message", e => {
+            if (e.source !== window || !e.data || e.data.source !== "PSS_DEMO_PAGE") return;
+            if (e.data.action === "DEMO_SET_STATE") {
+                chrome.runtime.sendMessage(
+                    {
+                        action: "DEMO_SET_STATE",
+                        domain,
+                        mode: e.data.mode || "SET_DAYS",
+                        daysRemaining: e.data.daysRemaining,
+                        password: e.data.password,
+                        username: e.data.username
+                    },
+                    res => {
+                        const oldBanner = document.getElementById("pss-expiry-popup");
+                        if (oldBanner) oldBanner.remove();
+                        if (res && res.status && res.status.isNearExpiry && systemEnabled) {
+                            showExpiryBanner(res.status.daysRemaining);
+                        }
+                        window.postMessage({ source: "PSS_EXTENSION_ACK", action: "DEMO_SET_STATE", result: res }, "*");
+                    }
+                );
+            } else if (e.data.action === "DEMO_GET_STATUS") {
+                chrome.runtime.sendMessage({ action: "GET_SITE_STATUS", domain }, res => {
+                    window.postMessage({ source: "PSS_EXTENSION_ACK", action: "DEMO_GET_STATUS", result: res }, "*");
+                });
+            }
+        });
     }
 
     function removeAllPopups() {
@@ -160,6 +191,17 @@
         return { valid: true, reason: null };
     }
 
+    function isResetOrSignupContext(input) {
+        const url = window.location.href.toLowerCase();
+        if (url.includes("forgot") || url.includes("reset") || url.includes("recover") || url.includes("signup") || url.includes("register")) {
+            return true;
+        }
+        if (input && (input.autocomplete === "new-password" || (input.id && input.id.toLowerCase().includes("new")))) {
+            return true;
+        }
+        return false;
+    }
+
     function evaluateTypedPassword(input) {
         if (!systemEnabled) return;
         const val = input.value;
@@ -196,8 +238,9 @@
             }
 
             const mySeq = ++validationSeq;
+            const strictReuse = isResetOrSignupContext(input);
             chrome.runtime.sendMessage(
-                { action: "VALIDATE_PASSWORD", domain, password: latestVal },
+                { action: "VALIDATE_PASSWORD", domain, password: latestVal, strictReuse },
                 res => {
                     if (chrome.runtime.lastError || !res || !systemEnabled) return;
                     if (mySeq !== validationSeq || input.value !== latestVal) return;
@@ -356,8 +399,9 @@
     }
 
     function handleLoginAttempt(pwInput, password, username, onAllow) {
+        const strictReuse = isResetOrSignupContext(pwInput);
         chrome.runtime.sendMessage(
-            { action: "ATTEMPT_LOGIN", domain, username, password },
+            { action: "ATTEMPT_LOGIN", domain, username, password, strictReuse },
             response => {
                 if (chrome.runtime.lastError || !response) {
                     onAllow();

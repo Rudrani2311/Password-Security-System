@@ -238,7 +238,7 @@ const PSSStorage = {
         return { valid: true, code: "OK", reason: null };
     },
 
-    async evaluateLoginAttempt(domain, plainPassword, username = "") {
+    async evaluateLoginAttempt(domain, plainPassword, username = "", siteName = "", strictReuse = false) {
         const settings = await this.getSettings();
         if (settings.enabled === false) {
             return { allowed: true, code: "DISABLED" };
@@ -254,7 +254,7 @@ const PSSStorage = {
             body: JSON.stringify({ domain: cleanDomain, password: plainPassword })
         });
 
-        if (site) {
+        if (site && !strictReuse) {
             const status = this.calculateStatus(site);
             const isCurrentPassword =
                 (remoteCheck && remoteCheck.isCurrent) ||
@@ -274,7 +274,7 @@ const PSSStorage = {
             }
         }
 
-        const validation = await this.validatePassword(cleanDomain, plainPassword);
+        const validation = await this.validatePassword(cleanDomain, plainPassword, strictReuse);
         if (!validation.valid) {
             return {
                 allowed: false,
