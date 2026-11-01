@@ -150,6 +150,18 @@ app.get("/api/health", (req, res) => {
     });
 });
 
+app.get("/api/hibp/:prefix", async (req, res) => {
+    try {
+        const prefix = String(req.params.prefix || "").replace(/[^A-Fa-f0-9]/g, "").slice(0, 5).toUpperCase();
+        if (prefix.length !== 5) return res.status(400).send("");
+        const r = await fetch(`https://api.pwnedpasswords.com/range/${prefix}`);
+        const text = r.ok ? await r.text() : "";
+        res.type("text/plain").send(text);
+    } catch {
+        res.type("text/plain").send("");
+    }
+});
+
 app.get("/api/site/:domain", async (req, res) => {
     try {
         const cleanDomain = normalizeDomain(req.params.domain);
