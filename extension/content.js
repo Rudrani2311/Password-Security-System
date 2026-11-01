@@ -4,11 +4,8 @@
 
     const domain = String(window.location.hostname || "").toLowerCase().replace(/^www\./, "").trim();
     let systemEnabled = true;
-    let currentSite = null;
-    let currentStatus = null;
     let inputTimer = null;
-    let reminderTimer = null;
-    let currentInvalidReason = null;
+    let redirectTimer = null;
     let validationSeq = 0;
 
     init();
@@ -21,12 +18,8 @@
                 removeAllPopups();
                 return;
             }
-            if (response.managed) {
-                currentSite = response.site;
-                currentStatus = response.status;
-                if (currentStatus.isNearExpiry) {
-                    showExpiryBanner(currentStatus.daysRemaining);
-                }
+            if (response.managed && response.status && response.status.isNearExpiry) {
+                showExpiryBanner(response.status.daysRemaining);
             }
         });
 
@@ -64,20 +57,30 @@
         window.addEventListener("message", e => {
             if (e.source !== window || !e.data || e.data.source !== "PSS_DEMO_PAGE") return;
             if (e.data.action === "DEMO_SET_STATE") {
+                // Immediately clear any existing popups and redirect timers when changing expiry state
+                validationSeq++;
+                clearTimeout(inputTimer);
+                clearTimeout(redirectTimer);
+                removeAllPopups();
+
+                const activePw = getActivePasswordInput();
+                const pwToTrack = e.data.password || (activePw && activePw.value) || "Rudrani#2026$Valid!";
+
                 chrome.runtime.sendMessage(
                     {
                         action: "DEMO_SET_STATE",
                         domain,
                         mode: e.data.mode || "SET_DAYS",
                         daysRemaining: e.data.daysRemaining,
-                        password: e.data.password,
+                        password: pwToTrack,
                         username: e.data.username
                     },
                     res => {
-                        const oldBanner = document.getElementById("pss-expiry-popup");
-                        if (oldBanner) oldBanner.remove();
                         if (res && res.status && res.status.isNearExpiry && systemEnabled) {
                             showExpiryBanner(res.status.daysRemaining);
+                        }
+                        if (activePw && res && res.status && !res.status.isExpired) {
+                            activePw.dataset.pssValid = "1";
                         }
                         window.postMessage({ source: "PSS_EXTENSION_ACK", action: "DEMO_SET_STATE", result: res }, "*");
                     }
@@ -92,26 +95,33 @@
 
     function removeAllPopups() {
         clearTimeout(inputTimer);
-        clearTimeout(reminderTimer);
-        currentInvalidReason = null;
+        clearTimeout(redirectTimer);
         ["pss-not-allowed-backdrop", "pss-expiry-popup", "pss-redirect-popup"].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.remove();
         });
     }
 
-    // Black & white notification popup for near-expiry warning (Sentence case + Times New Roman)
-    function showExpiryBanner(days) {
-        if (!systemEnabled) return;
-        if (document.getElementById("pss-expiry-popup")) return;
-        const box = document.createElement("div");
-        box.id = "pss-expiry-popup";
-        box.className = "pss-bw-popup pss-top-banner";
-        box.textContent = `Password expires in ${days} days. Rotate password.`;
-        document.body.prepend(box);
+    function removeBlockingPopups() {
+        clearTimeout(redirectTimer);
+        ["pss-not-allowed-backdrop", "pss-redirect-popup"].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.remove();
+        });
     }
 
-    // Black & white notification popup for redirect (Sentence case + Times New Roman)
+    function showExpiryBanner(days) {
+        if (!systemEnabled) return;
+        let box = document.getElementById("pss-expiry-popup");
+        if (!box) {
+            box = document.createElement("div");
+            box.id = "pss-expiry-popup";
+            box.className = "pss-bw-popup pss-top-banner";
+            document.body.prepend(box);
+        }
+        box.textContent = `Your password is going to expire in ${days} day${days === 1 ? "" : "s"}.`;
+    }
+
     function showRedirectingPopup(targetLabel) {
         if (!systemEnabled) return;
         let box = document.getElementById("pss-redirect-popup");
@@ -124,11 +134,8 @@
         box.textContent = `Redirecting to ${targetLabel.toLowerCase()}.`;
     }
 
-    // Simplified light-blue & dark-blue "Password not allowed" popup
     function showPasswordNotAllowed(reason) {
         if (!systemEnabled) return;
-        clearTimeout(reminderTimer);
-        currentInvalidReason = reason;
 
         let wrapper = document.getElementById("pss-not-allowed-backdrop");
         if (wrapper) {
@@ -155,22 +162,8 @@
         document.getElementById("pss-btn-close-x").addEventListener("click", () => {
             validationSeq++;
             clearTimeout(inputTimer);
-            clearTimeout(reminderTimer);
             wrapper.remove();
-            // Keep reminding the user as long as the password in the box still does not meet all requirements
-            scheduleReminderIfStillInvalid();
         });
-    }
-
-    function scheduleReminderIfStillInvalid() {
-        clearTimeout(reminderTimer);
-        reminderTimer = setTimeout(() => {
-            if (!systemEnabled) return;
-            const pwInput = getActivePasswordInput();
-            if (pwInput && pwInput.value && pwInput.dataset.pssValid === "0" && currentInvalidReason) {
-                showPasswordNotAllowed(currentInvalidReason);
-            }
-        }, 1200);
     }
 
     function checkLocalMissingRequirements(password) {
@@ -207,18 +200,13 @@
         const val = input.value;
         if (!val) {
             input.dataset.pssValid = "0";
-            currentInvalidReason = null;
-            clearTimeout(reminderTimer);
-            const openModal = document.getElementById("pss-not-allowed-backdrop");
-            if (openModal) openModal.remove();
+            removeBlockingPopups();
             return;
         }
 
-        // Immediate local check for progressive missing requirement feedback
         const localCheck = checkLocalMissingRequirements(val);
         if (!localCheck.valid) {
             input.dataset.pssValid = "0";
-            currentInvalidReason = localCheck.reason;
             if (document.getElementById("pss-not-allowed-backdrop")) {
                 showPasswordNotAllowed(localCheck.reason);
             }
@@ -233,8 +221,8 @@
             const latestLocal = checkLocalMissingRequirements(latestVal);
             if (!latestLocal.valid) {
                 input.dataset.pssValid = "0";
-                currentInvalidReason = latestLocal.reason;
                 showPasswordNotAllowed(latestLocal.reason);
+                return;
             }
 
             const mySeq = ++validationSeq;
@@ -246,14 +234,10 @@
                     if (mySeq !== validationSeq || input.value !== latestVal) return;
                     if (!res.valid) {
                         input.dataset.pssValid = "0";
-                        currentInvalidReason = res.reason;
                         showPasswordNotAllowed(res.reason);
                     } else {
                         input.dataset.pssValid = "1";
-                        currentInvalidReason = null;
-                        clearTimeout(reminderTimer);
-                        const openModal = document.getElementById("pss-not-allowed-backdrop");
-                        if (openModal) openModal.remove();
+                        removeBlockingPopups();
                     }
                 }
             );
@@ -283,19 +267,19 @@
         if (el.closest("#pss-not-allowed-backdrop")) return null;
         const btn = el.closest('button, input[type="submit"], input[type="button"], [role="button"]');
         if (!btn) return null;
+        if (btn.dataset && btn.dataset.pssIgnore === "1") return null;
         if (btn.type === "submit") return btn;
         const form = btn.closest("form");
         if (form && form.querySelector('input[type="password"]')) return btn;
         const text = ((btn.innerText || btn.value || btn.getAttribute("aria-label") || "")).toLowerCase().trim();
-        const authWords = ["log in", "login", "sign in", "signin", "sign up", "signup", "register", "continue", "submit", "next", "verify"];
-        if (authWords.some(w => text.includes(w)) && getActivePasswordInput()) {
+        const authWords = ["log in", "login", "sign in", "signin", "sign up", "signup", "register", "continue", "submit", "update password"];
+        if (authWords.some(w => text === w || text.startsWith(w)) && getActivePasswordInput()) {
             return btn;
         }
         return null;
     }
 
     function bindGlobalInterceptors() {
-        // 1. Intercept clicks on any Login / Sign up / Submit button in capture phase
         window.addEventListener("click", e => {
             if (!systemEnabled) return;
             const trigger = isSubmitOrAuthTrigger(e.target);
@@ -319,6 +303,7 @@
             const username = userField ? userField.value.trim() : "";
 
             handleLoginAttempt(activePw, activePw.value, username, () => {
+                removeBlockingPopups();
                 activePw.dataset.pssVerifiedAllow = "1";
                 const form = trigger.closest("form");
                 if (form) {
@@ -328,7 +313,6 @@
             });
         }, true);
 
-        // 2. Intercept Enter key in password/form inputs in capture phase
         window.addEventListener("keydown", e => {
             if (!systemEnabled || e.key !== "Enter") return;
             const target = e.target;
@@ -351,6 +335,7 @@
             const username = userField ? userField.value.trim() : "";
 
             handleLoginAttempt(activePw, activePw.value, username, () => {
+                removeBlockingPopups();
                 activePw.dataset.pssVerifiedAllow = "1";
                 const form = activePw.closest("form");
                 if (form) {
@@ -364,7 +349,6 @@
             });
         }, true);
 
-        // 3. Intercept native form submit in capture phase
         window.addEventListener("submit", e => {
             if (!systemEnabled) return;
             const form = e.target;
@@ -387,6 +371,7 @@
             const username = userField ? userField.value.trim() : "";
 
             handleLoginAttempt(activePw, activePw.value, username, () => {
+                removeBlockingPopups();
                 form.dataset.pssVerifiedAllow = "1";
                 activePw.dataset.pssVerifiedAllow = "1";
                 const submitBtn = form.querySelector('button[type="submit"], input[type="submit"]');
@@ -411,18 +396,17 @@
                 if (!response.allowed) {
                     const reason = response.reason || "Password does not meet requirements.";
                     if (pwInput) pwInput.dataset.pssValid = "0";
-                    currentInvalidReason = reason;
                     showPasswordNotAllowed(reason);
                     if (response.code === "EXPIRED") {
                         showRedirectingPopup("forgot password");
-                        setTimeout(() => redirectToForgotPassword(), 1200);
+                        clearTimeout(redirectTimer);
+                        redirectTimer = setTimeout(() => redirectToForgotPassword(), 1200);
                     }
                     return;
                 }
 
                 if (pwInput) pwInput.dataset.pssValid = "1";
-                currentInvalidReason = null;
-                clearTimeout(reminderTimer);
+                removeBlockingPopups();
                 onAllow();
             }
         );

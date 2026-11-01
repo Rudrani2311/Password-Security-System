@@ -43,10 +43,11 @@
     right: 0 !important;
     bottom: 0 !important;
     z-index: 2147483647 !important;
-    background: rgba(13, 42, 84, 0.25) !important;
+    background: rgba(13, 42, 84, 0.12) !important;
     display: flex !important;
-    align-items: center !important;
+    align-items: flex-start !important;
     justify-content: center !important;
+    padding-top: 18px !important;
     pointer-events: none !important;
 }
 

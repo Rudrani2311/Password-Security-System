@@ -121,12 +121,22 @@ const PSSStorage = {
     async getSite(domain) {
         const clean = PSSCrypto.normalizeDomain(domain);
         if (!clean) return null;
-        const remote = await this.fetchBackend(`/api/site/${encodeURIComponent(clean)}`);
         const vault = await new Promise(r => chrome.storage.local.get(["pss_vault"], res => r(res.pss_vault || [])));
         const localSite = vault.find(e => PSSCrypto.normalizeDomain(e.domain) === clean) || null;
+        const remote = await this.fetchBackend(`/api/site/${encodeURIComponent(clean)}`);
 
         if (remote && remote.managed && remote.site) {
-            const merged = { ...(localSite || {}), ...remote.site, domain: clean };
+            const remoteUpdatedMs = remote.site.updatedAt ? new Date(remote.site.updatedAt).getTime() : 0;
+            const localUpdatedMs = localSite && localSite.localUpdatedAt ? Number(localSite.localUpdatedAt) : 0;
+            const useLocalDate = localSite && localUpdatedMs > 0 && (Date.now() - localUpdatedMs < 15000 || localUpdatedMs >= remoteUpdatedMs);
+
+            const merged = {
+                ...(localSite || {}),
+                ...remote.site,
+                domain: clean,
+                lastRotatedAt: useLocalDate ? localSite.lastRotatedAt : remote.site.lastRotatedAt,
+                localUpdatedAt: useLocalDate ? localUpdatedMs : (remoteUpdatedMs || Date.now())
+            };
             await this.saveSite(merged, false);
             return merged;
         }
@@ -137,16 +147,19 @@ const PSSStorage = {
         const vault = await new Promise(r => chrome.storage.local.get(["pss_vault"], res => r(res.pss_vault || [])));
         const cleanDomain = PSSCrypto.normalizeDomain(entry.domain);
         const idx = vault.findIndex(e => PSSCrypto.normalizeDomain(e.domain) === cleanDomain);
+        const existing = idx >= 0 ? vault[idx] : {};
         const record = {
+            ...existing,
             domain: cleanDomain,
-            username: entry.username || "",
-            currentPasswordHash: entry.currentPasswordHash || "",
-            lastRotatedAt: entry.lastRotatedAt || new Date().toISOString(),
-            expiryDays: entry.expiryDays || 30,
-            warningThresholdDays: entry.warningThresholdDays || 5,
-            passwordHashHistory: entry.passwordHashHistory || []
+            username: entry.username !== undefined ? entry.username : (existing.username || ""),
+            currentPasswordHash: entry.currentPasswordHash !== undefined ? entry.currentPasswordHash : (existing.currentPasswordHash || ""),
+            lastRotatedAt: entry.lastRotatedAt || existing.lastRotatedAt || new Date().toISOString(),
+            expiryDays: entry.expiryDays || existing.expiryDays || 30,
+            warningThresholdDays: entry.warningThresholdDays || existing.warningThresholdDays || 5,
+            passwordHashHistory: entry.passwordHashHistory || existing.passwordHashHistory || [],
+            localUpdatedAt: entry.localUpdatedAt || Date.now()
         };
-        if (idx >= 0) vault[idx] = { ...vault[idx], ...record };
+        if (idx >= 0) vault[idx] = record;
         else vault.unshift(record);
         await new Promise(r => chrome.storage.local.set({ pss_vault: vault }, r));
 
@@ -202,32 +215,11 @@ const PSSStorage = {
         const shaHash = await PSSCrypto.sha256(plainPassword);
         const site = await this.getSite(cleanDomain);
 
-        const remoteReuse = await this.fetchBackend("/api/check-reuse", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ domain: cleanDomain, password: plainPassword })
-        });
-
-        if (site) {
+        if (site && !strictReuse) {
             const status = this.calculateStatus(site);
-            const isCurrent =
-                (remoteReuse && remoteReuse.isCurrent) ||
-                (site.currentPasswordHash && site.currentPasswordHash === shaHash);
-
-            if (isCurrent && !strictReuse) {
-                if (status.isExpired) {
-                    return { valid: false, code: "EXPIRED", reason: "Password expired." };
-                }
-                return { valid: true, code: "ACTIVE", reason: null };
+            if (status.isExpired) {
+                return { valid: false, code: "EXPIRED", reason: "Password expired." };
             }
-
-            if (Array.isArray(site.passwordHashHistory) && site.passwordHashHistory.includes(shaHash)) {
-                return { valid: false, code: "REUSED", reason: "Old password not allowed." };
-            }
-        }
-
-        if (remoteReuse && remoteReuse.reused) {
-            return { valid: false, code: "REUSED", reason: "Old password not allowed." };
         }
 
         const strength = this.checkStrength(plainPassword);
@@ -240,6 +232,30 @@ const PSSStorage = {
             return { valid: false, code: "BREACHED", reason: "This password was leaked in a data breach." };
         }
 
+        const remoteReuse = await this.fetchBackend("/api/check-reuse", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ domain: cleanDomain, password: plainPassword })
+        });
+
+        if (site) {
+            const isCurrent =
+                (remoteReuse && remoteReuse.isCurrent) ||
+                (site.currentPasswordHash && site.currentPasswordHash === shaHash);
+
+            if (isCurrent && !strictReuse) {
+                return { valid: true, code: "ACTIVE", reason: null };
+            }
+
+            if (Array.isArray(site.passwordHashHistory) && site.passwordHashHistory.includes(shaHash)) {
+                return { valid: false, code: "REUSED", reason: "Old password not allowed." };
+            }
+        }
+
+        if (remoteReuse && remoteReuse.reused && (strictReuse || !remoteReuse.isCurrent)) {
+            return { valid: false, code: "REUSED", reason: "Old password not allowed." };
+        }
+
         return { valid: true, code: "OK", reason: null };
     },
 
@@ -250,32 +266,18 @@ const PSSStorage = {
         }
 
         const cleanDomain = PSSCrypto.normalizeDomain(domain);
-        const shaHash = await PSSCrypto.sha256(plainPassword);
         const site = await this.getSite(cleanDomain);
-
-        const remoteCheck = await this.fetchBackend("/api/check-reuse", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ domain: cleanDomain, password: plainPassword })
-        });
 
         if (site && !strictReuse) {
             const status = this.calculateStatus(site);
-            const isCurrentPassword =
-                (remoteCheck && remoteCheck.isCurrent) ||
-                (site.currentPasswordHash && site.currentPasswordHash === shaHash);
-
-            if (isCurrentPassword) {
-                if (status.isExpired) {
-                    return {
-                        allowed: false,
-                        code: "EXPIRED",
-                        reason: "Password expired.",
-                        site,
-                        status
-                    };
-                }
-                return { allowed: true, code: "ACTIVE", site, status };
+            if (status.isExpired) {
+                return {
+                    allowed: false,
+                    code: "EXPIRED",
+                    reason: "Password expired.",
+                    site,
+                    status
+                };
             }
         }
 
@@ -285,6 +287,15 @@ const PSSStorage = {
                 allowed: false,
                 code: validation.code,
                 reason: validation.reason
+            };
+        }
+
+        if (validation.code === "ACTIVE" && site) {
+            return {
+                allowed: true,
+                code: "ACTIVE",
+                site,
+                status: this.calculateStatus(site)
             };
         }
 

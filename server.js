@@ -176,7 +176,8 @@ app.get("/api/site/:domain", async (req, res) => {
                 domain: site.domain,
                 username: site.username || "",
                 lastRotatedAt: site.lastRotatedAt,
-                expiryDays: site.expiryDays || 30
+                expiryDays: site.expiryDays || 30,
+                updatedAt: site.updatedAt
             },
             status: calculateStatus(site)
         });
@@ -197,15 +198,14 @@ app.post("/api/track-site", async (req, res) => {
             return res.json({ success: true, domain: cleanDomain });
         }
 
-        let site = await SiteCredential.findOne({ userId, domain: cleanDomain });
-        if (!site) {
-            site = await SiteCredential.create({
-                userId,
-                domain: cleanDomain,
-                username: username || "",
-                lastRotatedAt: rotationDate
-            });
-        }
+        const updateFields = { lastRotatedAt: rotationDate };
+        if (username) updateFields.username = username;
+
+        const site = await SiteCredential.findOneAndUpdate(
+            { userId, domain: cleanDomain },
+            { $set: updateFields },
+            { upsert: true, new: true, setDefaultsOnInsert: true }
+        );
         res.json({
             success: true,
             domain: cleanDomain,
@@ -320,12 +320,19 @@ app.post("/api/update-date", async (req, res) => {
         if (!domain || !lastRotatedAt) return res.status(400).json({ error: "domain and lastRotatedAt are required" });
         const cleanDomain = normalizeDomain(domain);
         const userId = getUserId(req);
+        const newDate = new Date(lastRotatedAt);
+        if (!mongoConnected) {
+            return res.json({ success: true, domain: cleanDomain, status: calculateStatus({ lastRotatedAt: newDate }) });
+        }
+        await SiteCredential.updateMany(
+            { domain: cleanDomain },
+            { $set: { lastRotatedAt: newDate } }
+        );
         const site = await SiteCredential.findOneAndUpdate(
             { userId, domain: cleanDomain },
-            { $set: { lastRotatedAt: new Date(lastRotatedAt) } },
-            { new: true }
+            { $set: { lastRotatedAt: newDate } },
+            { upsert: true, new: true, setDefaultsOnInsert: true }
         );
-        if (!site) return res.status(404).json({ error: "Site not found" });
         res.json({ success: true, domain: cleanDomain, status: calculateStatus(site) });
     } catch (err) {
         res.status(500).json({ error: err.message });

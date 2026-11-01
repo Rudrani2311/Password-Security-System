@@ -208,7 +208,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                     const daysRemaining = Number(request.daysRemaining ?? 30);
                     const daysElapsed = 30 - daysRemaining;
                     const rotatedAt = new Date(Date.now() - daysElapsed * 86400000).toISOString();
-                    const defaultPw = request.password || "DemoPass1!";
+                    const defaultPw = (request.password || "").trim() || "Rudrani#2026$Valid!";
                     const username = request.username || "24bcs10304@cuchd.in";
 
                     let site = await PSSStorage.getSite(cleanDomain);
@@ -217,8 +217,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                         site = rot.site;
                     }
                     site.lastRotatedAt = rotatedAt;
+                    site.localUpdatedAt = Date.now();
                     await PSSStorage.saveSite(site, false);
-                    await PSSStorage.fetchBackend("/api/update-date", {
+                    PSSStorage.fetchBackend("/api/update-date", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ domain: cleanDomain, lastRotatedAt: rotatedAt })

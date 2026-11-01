@@ -3,25 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Student portal — Sign in</title>
+    <title>Sign in</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="page-layout">
-        <!-- Left card: Sign in / Sign up form -->
+    <div class="single-layout">
         <div class="card">
-            <h1 class="card-title" id="auth-heading">Student portal sign in</h1>
-            <p class="card-subtitle" id="auth-subtitle">Enter your email and password to sign in to your account.</p>
-
-            <div id="rotation-success-banner" class="notice-box"></div>
+            <h1 class="card-title">Sign in</h1>
 
             <form id="demo-login-form" action="portal.html" method="GET">
-                <div class="form-group" style="margin-bottom: 12px;">
+                <div class="form-group">
                     <label for="demo-username">Email:</label>
                     <input type="email" id="demo-username" name="email" value="24bcs10304@cuchd.in" required autocomplete="username">
                 </div>
 
-                <div class="form-group" style="margin-bottom: 14px;">
+                <div class="form-group">
                     <div class="label-row">
                         <label for="demo-password">Password:</label>
                         <a href="forgot-password.html" class="link-btn" id="link-forgot-password">Forgot password</a>
@@ -32,61 +28,10 @@
                 <button type="submit" class="primary-btn" id="btn-login-submit">Log in</button>
             </form>
 
-            <div class="footer-row">
-                <span id="toggle-mode-prompt">Need a new account?</span>
-                <button type="button" class="link-btn" id="btn-toggle-auth-mode">Sign up</button>
-            </div>
-        </div>
-
-        <!-- Right card: Password expiry & extension test controls -->
-        <div class="card">
-            <h2 class="card-title">Password expiry test controls</h2>
-            <p class="card-subtitle">Use these controls to test password expiry, rotation, reuse, and breach checks immediately.</p>
-
-            <div class="status-panel">
-                <div class="status-row">
-                    <span>Website status:</span>
-                    <span class="status-value" id="sim-status-label">Active</span>
-                </div>
-                <div class="status-row">
-                    <span>Remaining days:</span>
-                    <span class="status-value" id="sim-days-label">30 days</span>
-                </div>
-                <div class="status-row">
-                    <span>Tracked password:</span>
-                    <span class="status-value" id="sim-current-pw">DemoPass1!</span>
-                </div>
-            </div>
-
-            <div id="sim-feedback" class="notice-box"></div>
-
-            <div class="section-heading">1. Test password expiry features</div>
-            <div class="btn-group">
-                <button type="button" class="secondary-btn" id="btn-sim-5days">
-                    Set 5 days remaining (Test near-expiry popup)
-                </button>
-                <button type="button" class="secondary-btn" id="btn-sim-expired">
-                    Set 0 days remaining (Test expired block and redirect)
-                </button>
-                <button type="button" class="secondary-btn" id="btn-sim-active">
-                    Set 30 days remaining (Reset to active)
-                </button>
-            </div>
-
-            <div class="section-heading">2. Quick password check presets</div>
-            <div class="btn-group">
-                <button type="button" class="secondary-btn" id="btn-fill-short">
-                    Fill "flower" (Tests 8 characters requirement)
-                </button>
-                <button type="button" class="secondary-btn" id="btn-fill-missing">
-                    Fill "flowerrr" (Tests missing uppercase, numbers, special)
-                </button>
-                <button type="button" class="secondary-btn" id="btn-fill-breached">
-                    Fill "P@ssw0rd123!" (Tests data breach detection)
-                </button>
-                <button type="button" class="secondary-btn" id="btn-reset-demo">
-                    Reset demo site history
-                </button>
+            <div class="expiry-options">
+                <button type="button" class="secondary-btn" id="btn-sim-active" data-pss-ignore="1">Reset to 30 days</button>
+                <button type="button" class="secondary-btn" id="btn-sim-5days" data-pss-ignore="1">5 days</button>
+                <button type="button" class="secondary-btn" id="btn-sim-expired" data-pss-ignore="1">Expired</button>
             </div>
         </div>
     </div>
