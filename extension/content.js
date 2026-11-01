@@ -76,12 +76,17 @@
         bindInputsAndForms();
         bindGlobalInterceptors();
         bindDemoPageBridge();
+        let obsTimer = null;
         const obs = new MutationObserver(() => {
             if (!isContextValid()) {
                 obs.disconnect();
                 return;
             }
-            bindInputsAndForms();
+            if (obsTimer) return;
+            obsTimer = setTimeout(() => {
+                obsTimer = null;
+                if (isContextValid()) bindInputsAndForms();
+            }, 180);
         });
         obs.observe(document.documentElement, { childList: true, subtree: true });
     }
@@ -274,7 +279,7 @@
                     }
                 }
             );
-        }, 250);
+        }, 120);
     }
 
     function getActivePasswordInput(root = document) {
@@ -298,16 +303,28 @@
     function isSubmitOrAuthTrigger(el) {
         if (!el || !el.closest) return null;
         if (el.closest("#pss-not-allowed-backdrop")) return null;
+        if (el.closest("a[href]")) return null;
         const btn = el.closest('button, input[type="submit"], input[type="button"], [role="button"]');
         if (!btn) return null;
+        if (btn.tagName === "A") return null;
         if (btn.dataset && btn.dataset.pssIgnore === "1") return null;
-        if (btn.type === "submit") return btn;
-        const form = btn.closest("form");
-        if (form && form.querySelector('input[type="password"]')) return btn;
+
         const text = ((btn.innerText || btn.value || btn.getAttribute("aria-label") || "")).toLowerCase().trim();
-        const authWords = ["log in", "login", "sign in", "signin", "sign up", "signup", "register", "continue", "submit", "update password"];
-        if (authWords.some(w => text === w || text.startsWith(w)) && getActivePasswordInput()) {
-            return btn;
+        const ignoreWords = ["forgot", "reset", "trouble", "show", "hide", "reveal", "cancel", "back", "close", "dismiss", "toggle"];
+        if (ignoreWords.some(w => text.includes(w))) return null;
+
+        if (btn.type === "submit") return btn;
+
+        const authWords = ["log in", "login", "sign in", "signin", "sign up", "signup", "register", "continue", "submit", "update password", "change password", "save password"];
+        if (authWords.some(w => text === w || text.startsWith(w))) {
+            const activePw = getActivePasswordInput();
+            if (activePw && activePw.value) return btn;
+        }
+
+        const form = btn.closest("form");
+        if (form && form.querySelector('input[type="password"]')) {
+            const rawType = (btn.getAttribute("type") || "").toLowerCase();
+            if (!rawType || rawType === "submit") return btn;
         }
         return null;
     }

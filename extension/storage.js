@@ -5,6 +5,9 @@ const PSSStorage = {
     BACKUP_CLOUD_URL: "https://password-security-system-1.onrender.com",
     LOCAL_SERVER_URL: "http://localhost:5000",
 
+    _localDownUntil: 0,
+    _remoteSyncAt: new Map(),
+
     async getUserId() {
         return new Promise(resolve => {
             chrome.storage.local.get(["pss_user_id"], result => {
@@ -24,16 +27,18 @@ const PSSStorage = {
     async getApiEndpoints() {
         const settings = await this.getSettings();
         const urls = [];
-        if (settings.serverUrl && !settings.serverUrl.includes("password-security-system.onrender.com")) {
+        const now = Date.now();
+        if (now >= this._localDownUntil) {
+            urls.push(this.LOCAL_SERVER_URL);
+        }
+        if (settings.serverUrl && !settings.serverUrl.includes("password-security-system.onrender.com") && !settings.serverUrl.includes("localhost")) {
             urls.push(settings.serverUrl.replace(/\/+$/, ""));
         }
-        if (!urls.includes(this.LOCAL_SERVER_URL)) urls.push(this.LOCAL_SERVER_URL);
         if (!urls.includes(this.CLOUD_SERVER_URL)) urls.push(this.CLOUD_SERVER_URL);
-        if (!urls.includes(this.BACKUP_CLOUD_URL)) urls.push(this.BACKUP_CLOUD_URL);
         return urls;
     },
 
-    async fetchBackend(path, options = {}) {
+    async fetchBackend(path, options = {}, maxWaitMs = 1200) {
         const endpoints = await this.getApiEndpoints();
         const userId = await this.getUserId();
         const headers = {
@@ -41,14 +46,19 @@ const PSSStorage = {
             "X-PSS-User-Id": userId
         };
         for (const base of endpoints) {
+            const isLocal = base.includes("localhost");
             try {
                 const controller = new AbortController();
-                const timeoutMs = base.includes("localhost") ? 1800 : 5000;
+                const timeoutMs = isLocal ? 350 : maxWaitMs;
                 const timer = setTimeout(() => controller.abort(), timeoutMs);
                 const res = await fetch(`${base}${path}`, { ...options, headers, signal: controller.signal });
                 clearTimeout(timer);
                 if (res.ok) return await res.json();
-            } catch {}
+            } catch {
+                if (isLocal) {
+                    this._localDownUntil = Date.now() + 20000;
+                }
+            }
         }
         return null;
     },
@@ -82,13 +92,13 @@ const PSSStorage = {
                     return d && !d.endsWith(".example.com");
                 });
 
-                const remote = await this.fetchBackend("/api/sites");
+                const remote = await this.fetchBackend("/api/sites", {}, 1500);
                 if (remote && Array.isArray(remote.sites)) {
                     const remoteDomains = new Set(remote.sites.map(r => PSSCrypto.normalizeDomain(r.domain)));
                     for (const item of localVault) {
                         const d = PSSCrypto.normalizeDomain(item.domain);
                         if (d && !remoteDomains.has(d)) {
-                            await this.fetchBackend("/api/track-site", {
+                            this.fetchBackend("/api/track-site", {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json" },
                                 body: JSON.stringify({
@@ -105,30 +115,34 @@ const PSSStorage = {
                     for (const rItem of remote.sites) {
                         const d = PSSCrypto.normalizeDomain(rItem.domain);
                         if (d && !d.endsWith(".example.com")) {
-                            map.set(d, { ...(map.get(d) || {}), ...rItem, domain: d });
+                            const loc = map.get(d);
+                            const locUpd = loc && loc.localUpdatedAt ? Number(loc.localUpdatedAt) : 0;
+                            const keepLocalDate = loc && locUpd > 0 && (Date.now() - locUpd < 20000);
+                            map.set(d, {
+                                ...(loc || {}),
+                                ...rItem,
+                                domain: d,
+                                lastRotatedAt: keepLocalDate ? loc.lastRotatedAt : rItem.lastRotatedAt
+                            });
                         }
                     }
                     localVault = Array.from(map.values());
-                    chrome.storage.local.set({ pss_vault: localVault });
-                } else {
-                    chrome.storage.local.set({ pss_vault: localVault });
                 }
+                chrome.storage.local.set({ pss_vault: localVault });
                 resolve(localVault);
             });
         });
     },
 
-    async getSite(domain) {
-        const clean = PSSCrypto.normalizeDomain(domain);
-        if (!clean) return null;
-        const vault = await new Promise(r => chrome.storage.local.get(["pss_vault"], res => r(res.pss_vault || [])));
-        const localSite = vault.find(e => PSSCrypto.normalizeDomain(e.domain) === clean) || null;
-        const remote = await this.fetchBackend(`/api/site/${encodeURIComponent(clean)}`);
-
-        if (remote && remote.managed && remote.site) {
+    async _syncSiteFromRemote(clean) {
+        try {
+            const remote = await this.fetchBackend(`/api/site/${encodeURIComponent(clean)}`, {}, 900);
+            if (!remote || !remote.managed || !remote.site) return null;
+            const vault = await new Promise(r => chrome.storage.local.get(["pss_vault"], res => r(res.pss_vault || [])));
+            const localSite = vault.find(e => PSSCrypto.normalizeDomain(e.domain) === clean) || null;
             const remoteUpdatedMs = remote.site.updatedAt ? new Date(remote.site.updatedAt).getTime() : 0;
             const localUpdatedMs = localSite && localSite.localUpdatedAt ? Number(localSite.localUpdatedAt) : 0;
-            const useLocalDate = localSite && localUpdatedMs > 0 && (Date.now() - localUpdatedMs < 15000 || localUpdatedMs >= remoteUpdatedMs);
+            const useLocalDate = localSite && localUpdatedMs > 0 && (Date.now() - localUpdatedMs < 20000 || localUpdatedMs >= remoteUpdatedMs);
 
             const merged = {
                 ...(localSite || {}),
@@ -139,8 +153,34 @@ const PSSStorage = {
             };
             await this.saveSite(merged, false);
             return merged;
+        } catch {
+            return null;
         }
-        return localSite;
+    },
+
+    async getSite(domain) {
+        const clean = PSSCrypto.normalizeDomain(domain);
+        if (!clean) return null;
+        const vault = await new Promise(r => chrome.storage.local.get(["pss_vault"], res => r(res.pss_vault || [])));
+        const localSite = vault.find(e => PSSCrypto.normalizeDomain(e.domain) === clean) || null;
+
+        const lastSync = this._remoteSyncAt.get(clean) || 0;
+        const shouldSync = Date.now() - lastSync > 10000;
+
+        if (localSite) {
+            // Instant return from local storage; sync remote in background without blocking UI
+            if (shouldSync) {
+                this._remoteSyncAt.set(clean, Date.now());
+                this._syncSiteFromRemote(clean);
+            }
+            return localSite;
+        }
+
+        if (shouldSync) {
+            this._remoteSyncAt.set(clean, Date.now());
+            return await this._syncSiteFromRemote(clean);
+        }
+        return null;
     },
 
     async saveSite(entry, syncRemote = true) {
@@ -164,7 +204,7 @@ const PSSStorage = {
         await new Promise(r => chrome.storage.local.set({ pss_vault: vault }, r));
 
         if (syncRemote) {
-            await this.fetchBackend("/api/track-site", {
+            this.fetchBackend("/api/track-site", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -182,7 +222,7 @@ const PSSStorage = {
         let vault = await new Promise(r => chrome.storage.local.get(["pss_vault"], res => r(res.pss_vault || [])));
         vault = vault.filter(e => PSSCrypto.normalizeDomain(e.domain) !== clean);
         await new Promise(r => chrome.storage.local.set({ pss_vault: vault }, r));
-        await this.fetchBackend(`/api/sites/${encodeURIComponent(clean)}`, { method: "DELETE" });
+        this.fetchBackend(`/api/sites/${encodeURIComponent(clean)}`, { method: "DELETE" });
         return true;
     },
 
@@ -205,15 +245,14 @@ const PSSStorage = {
         return { valid: true, reason: null };
     },
 
-    async validatePassword(domain, plainPassword, strictReuse = false) {
+    async validatePassword(domain, plainPassword, strictReuse = false, preloadedSite = undefined) {
         const settings = await this.getSettings();
         if (settings.enabled === false) {
             return { valid: true, code: "DISABLED", reason: null };
         }
 
         const cleanDomain = PSSCrypto.normalizeDomain(domain);
-        const shaHash = await PSSCrypto.sha256(plainPassword);
-        const site = await this.getSite(cleanDomain);
+        const site = preloadedSite !== undefined ? preloadedSite : await this.getSite(cleanDomain);
 
         if (site && !strictReuse) {
             const status = this.calculateStatus(site);
@@ -227,23 +266,19 @@ const PSSStorage = {
             return { valid: false, code: "WEAK", reason: strength.reason };
         }
 
-        const breach = await PSHIBP.checkBreach(plainPassword);
-        if (breach.breached) {
-            return { valid: false, code: "BREACHED", reason: "This password was leaked in a data breach." };
-        }
+        const shaHash = await PSSCrypto.sha256(plainPassword);
 
-        const remoteReuse = await this.fetchBackend("/api/check-reuse", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ domain: cleanDomain, password: plainPassword })
-        });
-
+        // Fast local check for current and historical passwords before any network call
         if (site) {
-            const isCurrent =
-                (remoteReuse && remoteReuse.isCurrent) ||
-                (site.currentPasswordHash && site.currentPasswordHash === shaHash);
-
-            if (isCurrent && !strictReuse) {
+            const isLocalCurrent = Boolean(site.currentPasswordHash && site.currentPasswordHash === shaHash);
+            if (isLocalCurrent) {
+                if (strictReuse) {
+                    return { valid: false, code: "REUSED", reason: "Old password not allowed." };
+                }
+                const breach = await PSHIBP.checkBreach(plainPassword);
+                if (breach.breached) {
+                    return { valid: false, code: "BREACHED", reason: "This password was leaked in a data breach." };
+                }
                 return { valid: true, code: "ACTIVE", reason: null };
             }
 
@@ -252,8 +287,27 @@ const PSSStorage = {
             }
         }
 
-        if (remoteReuse && remoteReuse.reused && (strictReuse || !remoteReuse.isCurrent)) {
-            return { valid: false, code: "REUSED", reason: "Old password not allowed." };
+        const breach = await PSHIBP.checkBreach(plainPassword);
+        if (breach.breached) {
+            return { valid: false, code: "BREACHED", reason: "This password was leaked in a data breach." };
+        }
+
+        // Only query remote reuse with a fast timeout if site is tracked
+        if (site) {
+            const remoteReuse = await this.fetchBackend("/api/check-reuse", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ domain: cleanDomain, password: plainPassword })
+            }, 600);
+
+            if (remoteReuse) {
+                if (remoteReuse.isCurrent && !strictReuse) {
+                    return { valid: true, code: "ACTIVE", reason: null };
+                }
+                if (remoteReuse.reused && (strictReuse || !remoteReuse.isCurrent)) {
+                    return { valid: false, code: "REUSED", reason: "Old password not allowed." };
+                }
+            }
         }
 
         return { valid: true, code: "OK", reason: null };
@@ -281,7 +335,7 @@ const PSSStorage = {
             }
         }
 
-        const validation = await this.validatePassword(cleanDomain, plainPassword, strictReuse);
+        const validation = await this.validatePassword(cleanDomain, plainPassword, strictReuse, site);
         if (!validation.valid) {
             return {
                 allowed: false,
@@ -299,7 +353,7 @@ const PSSStorage = {
             };
         }
 
-        const rot = await this.recordRotation(cleanDomain, plainPassword, username);
+        const rot = await this.recordRotation(cleanDomain, plainPassword, username, site);
         return {
             allowed: true,
             code: "TRACKED",
@@ -308,12 +362,12 @@ const PSSStorage = {
         };
     },
 
-    async recordRotation(domain, plainPassword, username = "") {
+    async recordRotation(domain, plainPassword, username = "", preloadedSite = undefined) {
         const cleanDomain = PSSCrypto.normalizeDomain(domain);
         const shaHash = await PSSCrypto.sha256(plainPassword);
         const nowIso = new Date().toISOString();
 
-        let site = (await this.getSite(cleanDomain)) || {
+        let site = (preloadedSite !== undefined ? preloadedSite : await this.getSite(cleanDomain)) || {
             domain: cleanDomain,
             username: username || "",
             passwordHashHistory: []
@@ -325,11 +379,13 @@ const PSSStorage = {
         site.currentPasswordHash = shaHash;
         site.passwordHashHistory = history;
         site.lastRotatedAt = nowIso;
+        site.localUpdatedAt = Date.now();
         if (username) site.username = username;
 
         await this.saveSite(site, false);
 
-        await this.fetchBackend("/api/record-rotation", {
+        // Fire-and-forget remote rotation recording so login is never delayed
+        this.fetchBackend("/api/record-rotation", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({

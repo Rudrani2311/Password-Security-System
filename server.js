@@ -211,22 +211,25 @@ app.post("/api/check-reuse", async (req, res) => {
         const userId = getUserId(req);
         if (!mongoConnected) return res.json({ reused: false, isCurrent: false });
 
-        const site = await SiteCredential.findOne({ userId, domain: cleanDomain }).lean();
-        const historyDocs = await PasswordHistory.find({ userId, domain: cleanDomain }).sort({ created_at: -1 }).limit(20).lean();
+        const [site, historyDocs] = await Promise.all([
+            SiteCredential.findOne({ userId, domain: cleanDomain }).lean(),
+            PasswordHistory.find({ userId, domain: cleanDomain }).sort({ created_at: -1 }).limit(8).lean()
+        ]);
 
         let isCurrent = false;
         if (site && site.currentPasswordHash) {
             isCurrent = await matchesHash(password, site.currentPasswordHash);
         }
 
-        const candidateHashes = [
-            ...(site && Array.isArray(site.passwordHashHistory) ? site.passwordHashHistory : []),
+        const candidateHashes = [...new Set([
+            ...(site && Array.isArray(site.passwordHashHistory) ? site.passwordHashHistory.slice(-6) : []),
             ...historyDocs.map(h => h.password_hash)
-        ];
+        ])].slice(0, 6);
 
         let reused = isCurrent;
         if (!reused) {
             for (const h of candidateHashes) {
+                if (site && h === site.currentPasswordHash) continue;
                 if (await matchesHash(password, h)) {
                     reused = true;
                     break;

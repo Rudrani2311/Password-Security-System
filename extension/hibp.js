@@ -11,6 +11,8 @@ const PSHIBP = {
         "5BAA61E4C9B93F3F0682250B6CF8331B7EE68FD8"  // password
     ]),
 
+    _prefixCache: new Map(),
+
     async checkBreach(password) {
         if (!password || typeof password !== "string") {
             return { breached: false, count: 0, status: "EMPTY_PASSWORD" };
@@ -24,34 +26,21 @@ const PSHIBP = {
             const prefix = fullHash.substring(0, 5);
             const suffix = fullHash.substring(5);
 
-            // Simple GET without custom headers avoids CORS preflight failures
-            let text = "";
-            try {
-                const controller = new AbortController();
-                const timer = setTimeout(() => controller.abort(), 4000);
-                const response = await fetch(`https://api.pwnedpasswords.com/range/${prefix}`, {
-                    method: "GET",
-                    signal: controller.signal
-                });
-                clearTimeout(timer);
-                if (response.ok) {
-                    text = await response.text();
-                }
-            } catch {
-                // Fallback to cloud or local backend proxy if direct browser request is blocked
-                const bases = [
-                    "https://password-security-system-zoni.onrender.com",
-                    "http://localhost:5000"
-                ];
-                for (const b of bases) {
-                    try {
-                        const proxyRes = await fetch(`${b}/api/hibp/${prefix}`);
-                        if (proxyRes.ok) {
-                            text = await proxyRes.text();
-                            if (text) break;
-                        }
-                    } catch {}
-                }
+            let text = this._prefixCache.get(prefix) || "";
+            if (!text) {
+                try {
+                    const controller = new AbortController();
+                    const timer = setTimeout(() => controller.abort(), 1200);
+                    const response = await fetch(`https://api.pwnedpasswords.com/range/${prefix}`, {
+                        method: "GET",
+                        signal: controller.signal
+                    });
+                    clearTimeout(timer);
+                    if (response.ok) {
+                        text = await response.text();
+                        if (text) this._prefixCache.set(prefix, text);
+                    }
+                } catch {}
             }
 
             if (!text) {
