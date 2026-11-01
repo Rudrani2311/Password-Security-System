@@ -42,21 +42,6 @@ const SALT_ROUNDS = 10;
 app.use(cors({ origin: "*" }));
 app.use(express.json());
 
-const demoSiteDir = path.join(__dirname, "demo-site");
-app.use(express.static(demoSiteDir));
-
-app.get("/forgot-password", (req, res) => {
-    res.sendFile(path.join(demoSiteDir, "forgot-password.html"));
-});
-
-app.get("/login", (req, res) => {
-    res.sendFile(path.join(demoSiteDir, "index.html"));
-});
-
-app.get("/portal", (req, res) => {
-    res.sendFile(path.join(demoSiteDir, "portal.html"));
-});
-
 const siteSchema = new mongoose.Schema({
     userId: { type: String, default: "default", index: true },
     domain: { type: String, required: true, index: true },
@@ -370,16 +355,94 @@ app.delete("/api/sites/:domain", async (req, res) => {
     }
 });
 
+function buildExtensionZipBuffer(dirPath) {
+    const files = [];
+    function walk(currentDir, relBase) {
+        for (const entry of fs.readdirSync(currentDir, { withFileTypes: true })) {
+            const fullPath = path.join(currentDir, entry.name);
+            const relPath = relBase ? `${relBase}/${entry.name}` : entry.name;
+            if (entry.isDirectory()) walk(fullPath, relPath);
+            else files.push({ name: Buffer.from(relPath, "utf8"), data: fs.readFileSync(fullPath) });
+        }
+    }
+    walk(dirPath, "");
+
+    const crcTable = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+        let c = n;
+        for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+        crcTable[n] = c >>> 0;
+    }
+    function crc32(buf) {
+        let crc = 0xFFFFFFFF;
+        for (let i = 0; i < buf.length; i++) crc = crcTable[(crc ^ buf[i]) & 0xFF] ^ (crc >>> 8);
+        return (crc ^ 0xFFFFFFFF) >>> 0;
+    }
+
+    const localParts = [];
+    const centralParts = [];
+    let offset = 0;
+
+    for (const f of files) {
+        const crc = crc32(f.data);
+        const size = f.data.length;
+        const nameLen = f.name.length;
+
+        const localHeader = Buffer.alloc(30);
+        localHeader.writeUInt32LE(0x04034b50, 0);
+        localHeader.writeUInt16LE(20, 4);
+        localHeader.writeUInt32LE(crc, 14);
+        localHeader.writeUInt32LE(size, 18);
+        localHeader.writeUInt32LE(size, 22);
+        localHeader.writeUInt16LE(nameLen, 26);
+
+        localParts.push(localHeader, f.name, f.data);
+
+        const centralHeader = Buffer.alloc(46);
+        centralHeader.writeUInt32LE(0x02014b50, 0);
+        centralHeader.writeUInt16LE(20, 4);
+        centralHeader.writeUInt16LE(20, 6);
+        centralHeader.writeUInt32LE(crc, 16);
+        centralHeader.writeUInt32LE(size, 20);
+        centralHeader.writeUInt32LE(size, 24);
+        centralHeader.writeUInt16LE(nameLen, 28);
+        centralHeader.writeUInt32LE(offset, 42);
+
+        centralParts.push(centralHeader, f.name);
+        offset += 30 + nameLen + size;
+    }
+
+    const centralBuffer = Buffer.concat(centralParts);
+    const endRecord = Buffer.alloc(22);
+    endRecord.writeUInt32LE(0x06054b50, 0);
+    endRecord.writeUInt16LE(files.length, 8);
+    endRecord.writeUInt16LE(files.length, 10);
+    endRecord.writeUInt32LE(centralBuffer.length, 12);
+    endRecord.writeUInt32LE(offset, 16);
+
+    return Buffer.concat([...localParts, centralBuffer, endRecord]);
+}
+
+app.get("/", (req, res) => {
+    res.json({
+        service: "Password Security System — Extension Backend API",
+        status: "ONLINE",
+        mongoConnected: mongoose.connection.readyState === 1,
+        database: MONGODB_DB_NAME,
+        downloadExtensionUrl: "/download-extension"
+    });
+});
+
 app.get("/download-extension", (req, res) => {
-    const zipPath = path.join(__dirname, "password-security-extension.zip");
-    if (fs.existsSync(zipPath)) {
-        const buffer = fs.readFileSync(zipPath);
+    try {
+        const extDir = path.join(__dirname, "extension");
+        const buffer = buildExtensionZipBuffer(extDir);
         res.setHeader("Content-Type", "application/zip");
         res.setHeader("Content-Disposition", 'attachment; filename="password-security-extension.zip"');
         res.setHeader("Content-Length", buffer.length);
         res.end(buffer);
-    } else {
-        res.status(404).json({ error: "Extension zip not found" });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
     }
 });
 

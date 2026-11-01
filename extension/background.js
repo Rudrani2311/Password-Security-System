@@ -195,41 +195,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                     break;
                 }
 
-                case "DEMO_SET_STATE": {
-                    const cleanDomain = PSSCrypto.normalizeDomain(
-                        request.domain || (sender.tab ? sender.tab.url : "")
-                    );
-                    if (request.mode === "RESET") {
-                        await PSSStorage.deleteSite(cleanDomain);
-                        if (sender.tab && sender.tab.url) await updateBadge(sender.tab.url);
-                        sendResponse({ success: true, mode: "RESET", managed: false });
-                        break;
-                    }
-                    const daysRemaining = Number(request.daysRemaining ?? 30);
-                    const daysElapsed = 30 - daysRemaining;
-                    const rotatedAt = new Date(Date.now() - daysElapsed * 86400000).toISOString();
-                    const defaultPw = (request.password || "").trim() || "Rudrani#2026$Valid!";
-                    const username = request.username || "24bcs10304@cuchd.in";
-
-                    let site = await PSSStorage.getSite(cleanDomain);
-                    if (!site || !site.currentPasswordHash) {
-                        const rot = await PSSStorage.recordRotation(cleanDomain, defaultPw, username);
-                        site = rot.site;
-                    }
-                    site.lastRotatedAt = rotatedAt;
-                    site.localUpdatedAt = Date.now();
-                    await PSSStorage.saveSite(site, false);
-                    PSSStorage.fetchBackend("/api/update-date", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ domain: cleanDomain, lastRotatedAt: rotatedAt })
-                    });
-                    const status = PSSStorage.calculateStatus(site);
-                    if (sender.tab && sender.tab.url) await updateBadge(sender.tab.url);
-                    sendResponse({ success: true, managed: true, site, status });
-                    break;
-                }
-
                 case "GET_VAULT": {
                     const vault = await PSSStorage.getVault();
                     const result = vault.map(site => ({
