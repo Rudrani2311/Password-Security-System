@@ -101,9 +101,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                     await PSSStorage.saveSettings({ ...current, enabled });
                     const tabs = await chrome.tabs.query({});
                     for (const t of tabs) {
-                        if (t.id) {
+                        if (t.id && t.url && t.url.startsWith("http")) {
                             try {
-                                chrome.tabs.sendMessage(t.id, { action: "SYSTEM_TOGGLED", enabled });
+                                chrome.tabs.sendMessage(
+                                    t.id,
+                                    { action: "SYSTEM_TOGGLED", enabled },
+                                    () => { void chrome.runtime.lastError; }
+                                );
                             } catch {}
                         }
                     }

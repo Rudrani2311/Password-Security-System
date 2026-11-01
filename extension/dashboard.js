@@ -1,6 +1,8 @@
 document.addEventListener("DOMContentLoaded", () => {
-    chrome.runtime.sendMessage({ action: "GET_VAULT" }, response => {
-        const listEl = document.getElementById("vault-tbody");
+    try {
+        chrome.runtime.sendMessage({ action: "GET_VAULT" }, response => {
+            void chrome.runtime.lastError;
+            const listEl = document.getElementById("vault-tbody");
         const vault = (response && response.vault) ? response.vault : [];
 
         if (vault.length === 0) {
@@ -22,4 +24,5 @@ document.addEventListener("DOMContentLoaded", () => {
             listEl.appendChild(row);
         });
     });
+    } catch {}
 });

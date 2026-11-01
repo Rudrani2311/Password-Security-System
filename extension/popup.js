@@ -19,7 +19,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         enabled = !enabled;
         settings = await PSSStorage.saveSettings({ ...settings, enabled });
         updateToggleUI(enabled);
-        chrome.runtime.sendMessage({ action: "SET_SYSTEM_ENABLED", enabled });
+        try {
+            chrome.runtime.sendMessage(
+                { action: "SET_SYSTEM_ENABLED", enabled },
+                () => { void chrome.runtime.lastError; }
+            );
+        } catch {}
     });
 
     function updateToggleUI(isOn) {
@@ -55,10 +60,17 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
         const res = await new Promise(resolve => {
-            chrome.runtime.sendMessage(
-                { action: "VALIDATE_PASSWORD", domain: currentDomain || "default", password: pw, strictReuse: true },
-                resolve
-            );
+            try {
+                chrome.runtime.sendMessage(
+                    { action: "VALIDATE_PASSWORD", domain: currentDomain || "default", password: pw, strictReuse: true },
+                    r => {
+                        void chrome.runtime.lastError;
+                        resolve(r);
+                    }
+                );
+            } catch {
+                resolve(null);
+            }
         });
         if (res && res.valid) {
             feedbackEl.textContent = "Password meets all requirements.";
@@ -78,13 +90,16 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     trackBtn.addEventListener("click", () => {
         if (!enabled || !currentDomain) return;
-        chrome.runtime.sendMessage(
-            { action: "TRACK_SITE", domain: currentDomain },
-            () => {
-                trackBtn.textContent = "Website tracked";
-                trackStatus.textContent = `Tracking ${currentDomain} (30 days remaining)`;
-            }
-        );
+        try {
+            chrome.runtime.sendMessage(
+                { action: "TRACK_SITE", domain: currentDomain },
+                () => {
+                    void chrome.runtime.lastError;
+                    trackBtn.textContent = "Website tracked";
+                    trackStatus.textContent = `Tracking ${currentDomain} (30 days remaining)`;
+                }
+            );
+        } catch {}
     });
 
     settingsBtn.addEventListener("click", () => {

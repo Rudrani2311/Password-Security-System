@@ -2,6 +2,23 @@
     if (window.__pss_injected) return;
     window.__pss_injected = true;
 
+    window.addEventListener("error", e => {
+        const msg = String((e && e.message) || "");
+        if (msg.includes("Extension context invalidated") || msg.includes("Receiving end does not exist")) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            return true;
+        }
+    }, true);
+
+    window.addEventListener("unhandledrejection", e => {
+        const msg = String((e && e.reason && (e.reason.message || e.reason)) || "");
+        if (msg.includes("Extension context invalidated") || msg.includes("Receiving end does not exist")) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+        }
+    }, true);
+
     const domain = String(window.location.hostname || "").toLowerCase().replace(/^www\./, "").trim();
     let systemEnabled = true;
     let inputTimer = null;
@@ -294,6 +311,7 @@
             input.dataset.pssValid = "0";
 
             input.addEventListener("input", () => {
+                if (!isContextValid()) return;
                 delete input.dataset.pssVerifiedAllow;
                 evaluateTypedPassword(input);
             });
@@ -331,7 +349,7 @@
 
     function bindGlobalInterceptors() {
         window.addEventListener("click", e => {
-            if (!systemEnabled) return;
+            if (!systemEnabled || !isContextValid()) return;
             const trigger = isSubmitOrAuthTrigger(e.target);
             if (!trigger) return;
 
@@ -364,7 +382,7 @@
         }, true);
 
         window.addEventListener("keydown", e => {
-            if (!systemEnabled || e.key !== "Enter") return;
+            if (!systemEnabled || !isContextValid() || e.key !== "Enter") return;
             const target = e.target;
             if (!target || (target.tagName !== "INPUT" && target.tagName !== "BUTTON")) return;
 
@@ -400,7 +418,7 @@
         }, true);
 
         window.addEventListener("submit", e => {
-            if (!systemEnabled) return;
+            if (!systemEnabled || !isContextValid()) return;
             const form = e.target;
             if (!form || !form.querySelector) return;
             const activePw = getActivePasswordInput(form);
