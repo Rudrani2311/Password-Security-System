@@ -48,8 +48,48 @@
 
         bindInputsAndForms();
         bindGlobalInterceptors();
+        bindDemoPageBridge();
         const obs = new MutationObserver(() => bindInputsAndForms());
         obs.observe(document.documentElement, { childList: true, subtree: true });
+    }
+
+    function bindDemoPageBridge() {
+        window.addEventListener("message", e => {
+            if (e.source !== window || !e.data || e.data.source !== "PSS_DEMO_PAGE") return;
+            if (e.data.action === "DEMO_SET_STATE") {
+                validationSeq++;
+                clearTimeout(inputTimer);
+                clearTimeout(redirectTimer);
+                removeAllPopups();
+
+                const activePw = getActivePasswordInput();
+                const pwToTrack = e.data.password || (activePw && activePw.value) || "Rudrani#2026$Valid!";
+
+                chrome.runtime.sendMessage(
+                    {
+                        action: "DEMO_SET_STATE",
+                        domain,
+                        mode: e.data.mode || "SET_DAYS",
+                        daysRemaining: e.data.daysRemaining,
+                        password: pwToTrack,
+                        username: e.data.username
+                    },
+                    res => {
+                        if (res && res.status && res.status.isNearExpiry && systemEnabled) {
+                            showExpiryBanner(res.status.daysRemaining);
+                        }
+                        if (activePw && res && res.status && !res.status.isExpired) {
+                            activePw.dataset.pssValid = "1";
+                        }
+                        window.postMessage({ source: "PSS_EXTENSION_ACK", action: "DEMO_SET_STATE", result: res }, "*");
+                    }
+                );
+            } else if (e.data.action === "DEMO_GET_STATUS") {
+                chrome.runtime.sendMessage({ action: "GET_SITE_STATUS", domain }, res => {
+                    window.postMessage({ source: "PSS_EXTENSION_ACK", action: "DEMO_GET_STATUS", result: res }, "*");
+                });
+            }
+        });
     }
 
     function removeAllPopups() {

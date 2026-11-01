@@ -423,14 +423,305 @@ function buildExtensionZipBuffer(dirPath) {
     return Buffer.concat([...localParts, centralBuffer, endRecord]);
 }
 
-app.get("/", (req, res) => {
-    res.json({
-        service: "Password Security System — Extension Backend API",
-        status: "ONLINE",
-        mongoConnected: mongoose.connection.readyState === 1,
-        database: MONGODB_DB_NAME,
-        downloadExtensionUrl: "/download-extension"
-    });
+const DEMO_STYLE_CSS = `* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: "Times New Roman", Times, serif;
+    color: #0d2a54;
+}
+body {
+    background-color: #e3effc;
+    min-height: 100vh;
+    padding: 150px 20px 40px;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+}
+.single-layout {
+    width: 100%;
+    max-width: 390px;
+}
+.card {
+    background-color: #f3f8fe;
+    border: 1px solid #b6d0ee;
+    border-radius: 8px;
+    padding: 24px 26px;
+    box-shadow: 0 4px 14px rgba(13, 42, 84, 0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+.card-title {
+    font-size: 22px;
+    font-weight: bold;
+    color: #0d2a54;
+}
+form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.label-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+label {
+    font-size: 15px;
+    font-weight: bold;
+    color: #0d2a54;
+}
+.link-btn {
+    font-size: 14px;
+    color: #143a6e;
+    text-decoration: underline;
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+input[type="email"],
+input[type="text"],
+input[type="password"] {
+    width: 100%;
+    background-color: #ffffff;
+    border: 1px solid #9abbe0;
+    border-radius: 5px;
+    padding: 9px 11px;
+    font-size: 15px;
+    color: #0d2a54;
+    outline: none;
+    font-family: "Times New Roman", Times, serif;
+}
+input:focus {
+    border-color: #143a6e;
+}
+.primary-btn {
+    width: 100%;
+    background-color: #143a6e;
+    color: #ffffff;
+    border: 1px solid #143a6e;
+    border-radius: 5px;
+    padding: 10px 14px;
+    font-size: 15px;
+    font-weight: bold;
+    cursor: pointer;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+}
+.primary-btn:hover {
+    background-color: #0f2d57;
+}
+.expiry-options {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #cfe1f5;
+}
+.secondary-btn {
+    width: 100%;
+    background-color: #d7e8fb;
+    color: #0d2a54;
+    border: 1px solid #9abbe0;
+    border-radius: 5px;
+    padding: 8px 6px;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    text-align: center;
+}
+.secondary-btn:hover,
+.secondary-btn.active-option {
+    background-color: #143a6e;
+    color: #ffffff;
+    border-color: #143a6e;
+}
+.footer-row {
+    font-size: 14px;
+    text-align: center;
+    padding-top: 6px;
+    border-top: 1px solid #cfe1f5;
+}`;
+
+const DEMO_SCRIPT_JS = `(function () {
+    const pwInput = document.getElementById("demo-password");
+    const userInput = document.getElementById("demo-username");
+    const loginForm = document.getElementById("demo-login-form");
+    const resetForm = document.getElementById("reset-password-form");
+    const newPwInput = document.getElementById("new-password-input");
+
+    if (loginForm && pwInput) {
+        loginForm.addEventListener("submit", () => {
+            if (pwInput.value) {
+                localStorage.setItem("pss_demo_last_pw", pwInput.value);
+            }
+        });
+    }
+
+    if (resetForm && newPwInput) {
+        resetForm.addEventListener("submit", () => {
+            if (newPwInput.value) {
+                localStorage.setItem("pss_demo_last_pw", newPwInput.value);
+            }
+        });
+    }
+
+    const btnActive = document.getElementById("btn-sim-active");
+    const btn5Days = document.getElementById("btn-sim-5days");
+    const btnExpired = document.getElementById("btn-sim-expired");
+    const allBtns = [btnActive, btn5Days, btnExpired].filter(Boolean);
+
+    function setActiveBtn(btn) {
+        allBtns.forEach(b => b.classList.remove("active-option"));
+        if (btn) btn.classList.add("active-option");
+    }
+
+    function setDaysState(daysRemaining, btn) {
+        setActiveBtn(btn);
+        const trackedPw = (pwInput && pwInput.value) || localStorage.getItem("pss_demo_last_pw") || "Rudrani#2026$Valid!";
+        const daysElapsed = 30 - daysRemaining;
+        const rotatedAt = new Date(Date.now() - daysElapsed * 86400000).toISOString();
+
+        fetch("/api/update-date", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                domain: window.location.hostname,
+                lastRotatedAt: rotatedAt
+            })
+        }).catch(() => {});
+
+        window.postMessage({
+            source: "PSS_DEMO_PAGE",
+            action: "DEMO_SET_STATE",
+            mode: "SET_DAYS",
+            daysRemaining,
+            password: trackedPw,
+            username: userInput ? userInput.value : "24bcs10304@cuchd.in"
+        }, "*");
+
+        if (pwInput && !pwInput.value) {
+            pwInput.value = trackedPw;
+        }
+    }
+
+    if (btnActive) btnActive.addEventListener("click", () => setDaysState(30, btnActive));
+    if (btn5Days) btn5Days.addEventListener("click", () => setDaysState(5, btn5Days));
+    if (btnExpired) btnExpired.addEventListener("click", () => setDaysState(0, btnExpired));
+})();`;
+
+const DEMO_LOGIN_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign in</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="single-layout">
+        <div class="card">
+            <h1 class="card-title">Sign in</h1>
+            <form id="demo-login-form" action="/portal.html" method="GET">
+                <div class="form-group">
+                    <label for="demo-username">Email:</label>
+                    <input type="email" id="demo-username" name="email" value="24bcs10304@cuchd.in" required autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <div class="label-row">
+                        <label for="demo-password">Password:</label>
+                        <a href="/forgot-password.html" class="link-btn" id="link-forgot-password">Forgot password</a>
+                    </div>
+                    <input type="password" id="demo-password" placeholder="Enter password" required autocomplete="current-password">
+                </div>
+                <button type="submit" class="primary-btn" id="btn-login-submit">Log in</button>
+            </form>
+            <div class="expiry-options">
+                <button type="button" class="secondary-btn" id="btn-sim-active" data-pss-ignore="1">Reset to 30 days</button>
+                <button type="button" class="secondary-btn" id="btn-sim-5days" data-pss-ignore="1">5 days</button>
+                <button type="button" class="secondary-btn" id="btn-sim-expired" data-pss-ignore="1">Expired</button>
+            </div>
+        </div>
+    </div>
+    <script src="/script.js"></script>
+</body>
+</html>`;
+
+const DEMO_FORGOT_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Forgot password</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="single-layout">
+        <div class="card">
+            <h1 class="card-title">Forgot password</h1>
+            <form id="reset-password-form" action="/index.html" method="GET">
+                <div class="form-group">
+                    <label for="reset-email">Email:</label>
+                    <input type="email" id="reset-email" value="24bcs10304@cuchd.in" required autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label for="new-password-input">New password:</label>
+                    <input type="password" id="new-password-input" placeholder="Enter new password" required autocomplete="new-password">
+                </div>
+                <button type="submit" class="primary-btn" id="btn-update-password">Update password</button>
+            </form>
+            <div class="footer-row">
+                <a href="/index.html" class="link-btn">Back to sign in</a>
+            </div>
+        </div>
+    </div>
+    <script src="/script.js"></script>
+</body>
+</html>`;
+
+const DEMO_PORTAL_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logged in</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="single-layout">
+        <div class="card">
+            <h1 class="card-title" id="logged-in-ok">Logged in</h1>
+            <a href="/index.html" class="primary-btn">Log out</a>
+        </div>
+    </div>
+</body>
+</html>`;
+
+app.get(["/", "/index.html", "/login"], (req, res) => {
+    res.type("text/html").send(DEMO_LOGIN_HTML);
+});
+
+app.get(["/forgot-password", "/forgot-password.html"], (req, res) => {
+    res.type("text/html").send(DEMO_FORGOT_HTML);
+});
+
+app.get(["/portal", "/portal.html"], (req, res) => {
+    res.type("text/html").send(DEMO_PORTAL_HTML);
+});
+
+app.get("/style.css", (req, res) => {
+    res.type("text/css").send(DEMO_STYLE_CSS);
+});
+
+app.get("/script.js", (req, res) => {
+    res.type("application/javascript").send(DEMO_SCRIPT_JS);
 });
 
 app.get("/download-extension", (req, res) => {
